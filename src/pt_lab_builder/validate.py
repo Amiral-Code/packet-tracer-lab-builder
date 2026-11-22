@@ -13,6 +13,7 @@ import copy
 import ipaddress
 import json
 import re
+import shlex
 
 from . import labgen, ptlab
 from .paths import library_dir
@@ -171,13 +172,18 @@ def lint(spec) -> Issues:
     if not statements:
         issues.error("[grade] has no items: Check Results would score nothing")
     table = {(r[0], labgen.long_if(r[1])): r[2] for r in labgen.addressing_rows(spec) if len(r) >= 3}
+    first_addr = {r[0] for r in labgen.addressing_rows(spec) if len(r) >= 3 and r[2] and r[2].lower() != "dhcp"}
     for st in statements:
         w = st.split()
-        if not w or w[0] not in ("ip", "up", "gw", "hostname", "line", "dhcp"):
-            issues.error(f"grade: unknown statement {st!r}")
+        if not w or w[0] not in labgen.GRADE_STATEMENTS:
+            issues.error(f"grade: unknown statement {st!r} (known: {', '.join(labgen.GRADE_STATEMENTS)})")
             continue
         if len(w) < 2 or w[1] not in model:
             issues.error(f"grade: {st!r}: unknown device")
+            continue
+        problem = _statement_problem(w, st, model, ports, first_addr)
+        if problem:
+            issues.error(f"grade: {st!r}: {problem}")
             continue
         if w[0] in ("ip", "up"):
             if len(w) < 3:
@@ -203,6 +209,55 @@ def lint(spec) -> Issues:
     return issues
 
 
+def _statement_problem(w, st, model, ports, first_addr):
+    """Shape errors for one grade statement, or None."""
+    k = w[0]
+    need = {"ip": 4, "up": 3, "gw": 3, "hostname": 3, "dhcp": 2, "vlan": 4, "access": 4, "route": 4,
+            "ospf": 5, "stp": 4}
+    if k in need and len(w) != need[k]:
+        return f"expects {need[k] - 1} fields after '{k}'"
+    try:
+        if k == "line" and len(w) < 3:
+            return "missing the config line"
+        if k == "in":
+            parts = shlex.split(st)
+            if len(parts) != 4:
+                return 'write it as: in DEV "PARENT LINE" "SUB-COMMAND" (quote both)'
+        if k in ("vlan", "access") and not 1 <= int(w[2 if k == "vlan" else 3]) <= 4094:
+            return "VLAN must be 1-4094"
+        if k in ("access", "trunk"):
+            if len(w) < 3:
+                return "missing interface"
+            if not _port_ok(ports[w[1]], labgen.long_if(w[2])):
+                return f"{w[1]} has no port {labgen.long_if(w[2])}"
+        if k == "trunk":
+            opts = w[3:]
+            if len(opts) % 2 or any(o not in ("allowed", "native") for o in opts[::2]):
+                return "options are 'allowed LIST' and 'native VLAN'"
+            if "allowed" in opts:
+                labgen.vlan_list(opts[opts.index("allowed") + 1])
+        if k == "route":
+            ipaddress.ip_network(w[2], strict=True)
+        if k == "ospf":
+            ipaddress.ip_network(w[3], strict=True)
+            int(w[2])
+        if k == "stp":
+            labgen.vlan_list(w[2])
+            if int(w[3]) % 4096 or not 0 <= int(w[3]) <= 61440:
+                return "priority must be a multiple of 4096 from 0 to 61440"
+        if k == "ping":
+            rest = [x for x in w[3:] if x != "fail"]
+            if len(w) < 3 or w[2] not in model:
+                return "write it as: ping SRC DST [A.B.C.D] [fail], with DST a device name"
+            if rest:
+                ipaddress.ip_address(rest[0])
+            elif w[2] not in first_addr:
+                return f"{w[2]} has no address in the addressing table: add the address to ping"
+    except ValueError as e:
+        return str(e)
+    return None
+
+
 def _grade(spec, which, s=None):
     s = s or spec
     t = labgen.build_topology(s, labgen.configs_for(s, which), labgen.pcs_for(s, which))
@@ -225,11 +280,16 @@ def selfcheck(spec) -> Issues:
         elif free and kind == "configure":
             issues.warn(f"{len(free)} graded item(s) already pass at the start: {'; '.join(free[:4])}"
                         + (" ..." if len(free) > 4 else ""))
+    pings = labgen.connectivity_tests(spec)
     for i, f in enumerate(spec.get("fault", []), 1):
         alone = copy.deepcopy(spec)
         alone["lab"]["kind"] = "troubleshoot"
         alone["fault"] = [f]
         _, res = _grade(spec, "start", alone)
         if all(res):
-            issues.error(f"fault {i} ({f.get('device')}: {f.get('symptom', '')[:50]}) is not detected by any graded item")
+            msg = f"fault {i} ({f.get('device')}: {f.get('symptom', '')[:50]}) is not detected by any graded item"
+            if pings:  # a ping test may catch it, but only Packet Tracer can run one
+                issues.warn(msg + "; only a connectivity test could catch it (verify in Packet Tracer)")
+            else:
+                issues.error(msg)
     return issues, sum(answer), len(answer), sum(start)

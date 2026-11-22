@@ -131,7 +131,16 @@ def run_check(c, devs):
         if "ip_in" in c and not s["ip"].startswith(c["ip_in"]):
             return False
         return True
+    if "vlan" in c:  # VLANs live in vlan.dat: the saved VLANS element, or config text not yet re-parsed
+        num, name = c["vlan"]
+        for v in d.iter("VLAN"):
+            if v.get("number") == str(num):
+                return v.get("name") == name
+        bl = blocks(get_config(d))
+        return f"name {name}" in bl.get(f"vlan {num}", [])
     bl = blocks(get_config(d))
+    if c.get("top"):  # an unindented line (Packet Tracer matches whole lines, not sub-commands)
+        return all(any(re.fullmatch(rx, l, re.I) for l in bl["GLOBAL"]) for rx in c.get("has", []))
     if "block" in c:
         scope = None
         for k, v in bl.items():
@@ -202,6 +211,13 @@ PKA_KINDS = {
     # the {{DeviceConfig.isInConfig:LINE}} variable)
     "config_line": (["IOS Configuration", "Running Configuration", "Entire Config"], "Entire Config {n:02d}",
                     "Entire Config {n:02d}", "8", "Other"),
+    # one running-config line, the way the Activity Wizard grades a ticked line: the node ID is the line
+    # itself, or "PARENT LINE" for an indented line (value keeps IOS's leading space); items are matched
+    # by ID, so line order does not matter
+    "run_line": (["IOS Configuration", "Running Configuration", "LINES"], "{value}", "{line_id}", "8", "Other"),
+    "vlan_name": (["VLANS", "{vlan}"], "VLAN Name", "VLAN Name", "5", "Switching"),
+    "access_vlan": (["Ports", "{port}"], "Access VLAN", "Access VLAN", "5", "Switching"),
+    "native_vlan": (["Ports", "{port}"], "Native VLAN", "Native VLAN", "5", "Switching"),
 }
 
 
@@ -221,6 +237,8 @@ def comparisons(items):
             line_no[it["device"]] = line_no.get(it["device"], 0) + 1
             name = nid = name.format(n=line_no[it["device"]])
             variable = "{{DeviceConfig.isInConfig:%s}}" % it["value"]
+        elif it["kind"] == "run_line":
+            name, nid = it["value"].strip(), it["line_id"]
         cur.append(_node(name, nid, head=False, eclass=eclass, comp=comp, points=str(it.get("points", 1)),
                          value=value, check="2", variable=variable))
     # tri-state checkboxes: every branch above a graded item is "partially checked" (1),
@@ -304,7 +322,7 @@ def build_pka(a, start_tree, answer_tree):
     ET.SubElement(act, "DYNAMIC_PERCENTAGE_FEEDBACK", {"TYPE": "1"}).text = "true"
     ET.SubElement(act, "USER_PROFILE_LOCKED").text = "false"
     ET.SubElement(act, "USER_PROFILE_NOGUEST").text = "false"
-    ET.SubElement(act, "COMPONENT_LIST").text = "Other, Physical, Ip, Routing"
+    ET.SubElement(act, "COMPONENT_LIST").text = "Other, Physical, Ip, Routing, Switching"
     ET.SubElement(act, "CLEAN_ACTIVITY").text = "false"
     sm = start_tree.getroot().find("SCRIPT_MODULE")
     act.append(copy.deepcopy(sm) if sm is not None else ET.Element("SCRIPT_MODULE"))
@@ -315,6 +333,46 @@ def build_pka(a, start_tree, answer_tree):
     ET.SubElement(act, "CEPS")
     ET.SubElement(act, "EXT_PORT_MGR")
     return ET.ElementTree(act)
+
+# ---------------------------------------------------------------- connectivity tests
+def add_connectivity_tests(answer_tree, tests):
+    """Store ping tests the way the Activity Wizard does: saved PDUs in the answer network's first
+    scenario. CActivityFile::runConnectivityTestAt reads getAnsNetworkFile()->getScenarioSet()->
+    getScenarioAt(0), runs each PDU from the same-named device of the student's network and compares
+    the outcome with TEST_CONDITION (3 = should succeed, 2 = should fail, other = not tested)."""
+    root = answer_tree.getroot()
+    devs = devices(answer_tree)
+    sset = root.find("SCENARIOSET")
+    if sset is None:
+        sset = ET.SubElement(root, "SCENARIOSET")
+    scen = sset.find("SCENARIO")
+    if scen is None:
+        scen = ET.SubElement(sset, "SCENARIO")
+        ET.SubElement(scen, "NAME", {"translate": "true"}).text = "Scenario 0"
+        ET.SubElement(scen, "DESCRIPTION", {"translate": "true"})
+    for t in tests:
+        pdu = ET.SubElement(scen, "PDU")
+        ET.SubElement(pdu, "TYPE", {"patterned": "no"}).text = "0"
+        ET.SubElement(pdu, "SOURCE").text = devs[t["src"]].findtext("ENGINE/SAVE_REF_ID")
+        ET.SubElement(pdu, "PORT")
+        ET.SubElement(pdu, "DESTINATION", {"device": devs[t["dst"]].findtext("ENGINE/SAVE_REF_ID")})
+        ET.SubElement(pdu, "COLOR").text = "-8664361" if t["succeed"] else "-3394765"
+        ip = ET.SubElement(pdu, "PDU")
+        ET.SubElement(ip, "TYPE").text = "CIpHeader"
+        ET.SubElement(ip, "SRCADDR")
+        ET.SubElement(ip, "DSTADDR").text = t["ip"]
+        ET.SubElement(ip, "PROTOCOL")
+        ET.SubElement(ip, "TTL").text = "255"
+        icmp = ET.SubElement(ip, "PDU")
+        for tag, val in (("TYPE", "CIcmpMessage"), ("ICMPTYPE", "8"), ("CODE", "0"), ("ID", "0"), ("SEQ", "0"),
+                         ("CHK", "0")):
+            ET.SubElement(icmp, tag).text = val
+        ET.SubElement(ip, "TOS").text = "0"
+        ET.SubElement(pdu, "TEST_CONDITION").text = "3" if t["succeed"] else "2"
+        ET.SubElement(pdu, "POINTS").text = str(t.get("points", 1))
+        ET.SubElement(pdu, "PDU_SIZE").text = "0"
+        ET.SubElement(pdu, "START").text = "0"
+
 
 # ---------------------------------------------------------------- launcher
 def open_pt(path):

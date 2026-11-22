@@ -191,6 +191,9 @@ items = [
   "line ISP ip route 192.168.20.0 255.255.255.0 198.51.100.2",
   "line HQ-R1 ip route 0.0.0.0 0.0.0.0 203.0.113.2",
   "line BR-R1 ip route 0.0.0.0 0.0.0.0 198.51.100.1",
+  "ping HQ-PC1 BR-SRV1",
+  "ping BR-PC1 BR-SRV1",
+  "ping BR-PC1 HQ-PC1",
 ]
 
 debrief = """

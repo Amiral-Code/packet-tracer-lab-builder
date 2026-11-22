@@ -70,7 +70,23 @@ class LintTests(unittest.TestCase):
         self.assertError(lambda s: s["addressing"]["rows"][0].__setitem__(2, "192.168.1.0/24"), "network or broadcast")
 
     def test_unknown_grade_statement(self):
-        self.assertError(lambda s: s["grade"]["items"].append("vlan SW1 10"), "unknown statement")
+        self.assertError(lambda s: s["grade"]["items"].append("eigrp R1 10"), "unknown statement")
+
+    def test_new_statements_are_checked(self):
+        self.assertError(lambda s: s["grade"]["items"].append("vlan SW1 10"), "expects 3 fields")
+        self.assertError(lambda s: s["grade"]["items"].append("access SW1 Fa0/9 10"), "has no port")
+        self.assertError(lambda s: s["grade"]["items"].append("stp SW1 10 5000"), "multiple of 4096")
+        self.assertError(lambda s: s["grade"]["items"].append("route R1 10.0.0.1/24 10.0.0.2"), "host bits")
+        self.assertError(lambda s: s["grade"]["items"].append("trunk SW1 G0/1 permit 10"), "allowed LIST")
+        self.assertError(lambda s: s["grade"]["items"].append("in R1 interface G0/0 no shutdown"), "quote both")
+        self.assertError(lambda s: s["grade"]["items"].append("ping PC1 SW1"), "no address")
+
+    def test_valid_new_statements_pass(self):
+        errors = self.lint(lambda s: s["grade"]["items"].extend([
+            "vlan SW1 10 SALES", "access SW1 Fa0/1 10", "trunk SW1 G0/1 allowed 10,20 native 99",
+            "stp SW1 10 4096", "route R1 0.0.0.0/0 192.168.1.254", "ospf R1 1 192.168.1.0/24 0",
+            'in R1 "interface GigabitEthernet0/0" "no shutdown"', "ping PC1 R1", "ping PC1 R1 8.8.8.8 fail"])).errors
+        self.assertEqual(errors, [])
 
     def test_no_grade_items(self):
         self.assertError(lambda s: s["grade"].update(items=[]), "score nothing")

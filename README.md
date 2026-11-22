@@ -6,7 +6,7 @@ This project is independent of Cisco. Cisco Packet Tracer and Cisco device data 
 
 ## Current status
 
-The project is an alpha. Logical topology generation, configuration/troubleshooting activities, instruction pages, basic grading, and single-building Physical placement work. Hierarchical multi-site Physical layouts and grading of rack placement or student-created cabling are planned, but are not yet implemented.
+The project is an alpha. Logical topology generation, configuration/troubleshooting activities, instruction pages, grading (addresses, interface state, VLANs, access and trunk ports, static and OSPF routes, STP priority, any running-config line, and Packet Tracer connectivity tests), and single-building Physical placement work. Hierarchical multi-site Physical layouts and grading of rack placement or student-created cabling are planned, but are not yet implemented.
 
 ## Requirements
 

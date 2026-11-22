@@ -63,21 +63,52 @@ interface G0/0
 """
 ```
 
-Supported grading statements:
+Grading statements (one string each; quote multi-word fields of `in` with double quotes):
+
+| Statement | Grades | Packet Tracer item |
+|---|---|---|
+| `ip DEV IFACE A.B.C.D/NN` | interface or host address and mask | IP Address + Subnet Mask |
+| `up DEV IFACE` | interface is up (no `shutdown`) | Port Up |
+| `gw HOST A.B.C.D` | host default gateway | Default Gateway |
+| `dhcp HOST` | host uses DHCP | local check only |
+| `hostname DEV NAME` | device hostname | Host Name |
+| `line DEV TEXT` | an **unindented** running-config line, e.g. `ip route`, `ip nat inside source …`, `access-list …` | config line |
+| `in DEV "PARENT" "LINE"` | an indented line inside a section, e.g. `in R1 "interface GigabitEthernet0/1" "ip helper-address 10.0.0.9"` | config line |
+| `vlan SW ID NAME` | VLAN exists with that name | VLANS > ID > VLAN Name |
+| `access SW IFACE VLAN` | access port in that VLAN | Access VLAN + ` switchport mode access` |
+| `trunk SW IFACE [allowed LIST] [native N]` | trunk, its allowed list (written in IOS form, `10-12,99`) and native VLAN | ` switchport mode trunk`, allowed line, Native VLAN |
+| `route DEV PREFIX/LEN NEXT-HOP` | static route (`0.0.0.0/0` for a default) | `ip route …` line |
+| `ospf DEV PID PREFIX/LEN AREA` | OSPF network statement (wildcard computed) | ` network … area …` under `router ospf PID` |
+| `stp SW VLAN PRIORITY` | per-VLAN bridge priority (multiple of 4096) | `spanning-tree vlan … priority …` line |
+| `ping SRC DST [A.B.C.D] [fail]` | end-to-end reachability; `fail` = must **not** succeed (ACL labs) | Connectivity Tests tab |
 
 ```toml
 [grade]
 items = [
   "ip R1 G0/0 10.0.0.1/30",
   "up R1 G0/0",
-  "gw PC1 192.168.10.1",
-  "hostname R1 HQ-R1",
-  "line R1 ip route 0.0.0.0 0.0.0.0 10.0.0.2",
-  "dhcp PC1",
+  "access SW1 Fa0/5 10",
+  "trunk SW1 G0/1 allowed 10,20,99 native 99",
+  "route R1 0.0.0.0/0 10.0.0.2",
+  'in R1 "router ospf 1" "router-id 1.1.1.1"',
+  "ping PC1 SRV1",
+  "ping GUEST1 SRV1 fail",
 ]
 ```
 
-Grade what the learner must change. The current DSL can check configuration facts but is not yet a full operational-state verifier; treat end-to-end behaviour, neighbor state, and physical placement grading as future extensions unless you add explicit support.
+How Packet Tracer grades config lines (from its `Ext.AssessmentModel.DeviceConfig` plugin and the Activity
+Wizard's `LINES` nodes): a line is matched **whole and exactly** against the student's running-config. An
+indented sub-command is identified by its parent line plus the line, so it only matches under that parent. That is why
+`line` must be an unindented line; for anything inside `interface`, `router`, `line vty`, `ip dhcp pool` or a named
+ACL, use `in` (or `access`/`trunk`/`ospf`). `ptlab lint` enforces it: the self-check fails a `line` item that
+only exists indented in the answer. Write lines exactly as `show running-config` prints them (full interface names,
+IOS keyword order).
+
+Connectivity tests are stored as saved PDUs in the answer network's first scenario and run by Packet Tracer
+from the same-named device in the student's network. Only Packet Tracer can run them: `ptlab lint` does not
+simulate pings, and `ptlab check` reports only the config items. DST's address defaults to its first address in
+the addressing table. Use pings to grade outcomes (inter-VLAN routing, NAT, ACL policy) on top of the config
+items, not instead of them, so `ptlab lint` can still prove each fault is caught.
 
 Serialization invariants established by local testing:
 

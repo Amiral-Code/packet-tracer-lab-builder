@@ -13,6 +13,7 @@ import html
 import ipaddress
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tomllib
@@ -93,7 +94,10 @@ def merge(factory_lines, snippet):
                 sec = None
             continue
         line = raw.strip()
-        top = re.match(r"(interface|router|line|ip dhcp pool|ip access-list|vlan|class-map|policy-map|crypto|key chain)\b", line)
+        # a section header is unindented and is the keyword plus a space: "router ospf 1" opens one,
+        # " router-id 1.1.1.1" does not ("router\b" also matched the hyphen in router-id)
+        top = not raw.startswith((" ", "\t")) and re.match(
+            r"(interface|router|line|ip dhcp pool|ip access-list|vlan|class-map|policy-map|crypto|key chain)\s", line)
         if top:
             line = ("interface " + long_if(line.split(None, 1)[1])) if line.startswith("interface ") else line
             if line not in index:
@@ -365,6 +369,68 @@ def pcs_for(spec, which):
 
 
 # ---------------------------------------------------------------- grading statements
+GRADE_STATEMENTS = ("ip", "up", "gw", "hostname", "line", "in", "dhcp", "vlan", "access", "trunk", "route",
+                    "ospf", "stp", "ping")
+
+
+def _args(statement, n):
+    """Split a statement with shell-style quoting: in R1 "router ospf 1" "network 10.0.0.0 0.0.0.3 area 0"."""
+    parts = shlex.split(statement)
+    if len(parts) != n:
+        die(f"grade statement needs {n} fields (quote multi-word ones): {statement}")
+    return parts
+
+
+def vlan_list(text):
+    """'10,20,30,11,12' -> '10-12,20,30' (the form IOS shows in the running-config)."""
+    nums = sorted({n for part in str(text).split(",") for n in
+                   (range(int(part.split("-")[0]), int(part.split("-")[1]) + 1) if "-" in part else [int(part)])})
+    out, i = [], 0
+    while i < len(nums):
+        j = i
+        while j + 1 < len(nums) and nums[j + 1] == nums[j] + 1:
+            j += 1
+        out.append(str(nums[i]) if j == i else f"{nums[i]}-{nums[j]}" if j > i + 1 else f"{nums[i]},{nums[j]}")
+        i = j + 1
+    return ",".join(out)
+
+
+def _line_item(items, checks, dev, parent, line):
+    """A running-config line Packet Tracer grades natively (LINES node) plus the matching local check."""
+    line = " ".join(line.split())
+    if parent:
+        parent = " ".join(parent.split())
+        items.append({"device": dev, "kind": "run_line", "line_id": f"{parent} {line}", "value": " " + line})
+        checks.append({"device": dev, "desc": f"{dev}: {parent} / {line}", "block": re.escape(parent),
+                       "has": [re.escape(line)]})
+    else:
+        items.append({"device": dev, "kind": "run_line", "line_id": line, "value": line})
+        checks.append({"device": dev, "desc": f"{dev}: {line}", "has": [re.escape(line)], "top": True})
+
+
+def connectivity_tests(spec):
+    """ping SRC DST [IP] [fail] -> tests for the Connectivity Tests tab. DST's address defaults to its first
+    address in the addressing table."""
+    first = {}
+    for row in addressing_rows(spec):
+        if len(row) >= 3 and row[2] and row[2].lower() != "dhcp":
+            first.setdefault(row[0], str(ipaddress.ip_interface(row[2]).ip))
+    tests = []
+    for st in spec.get("grade", {}).get("items", []):
+        w = st.split()
+        if w[0] != "ping":
+            continue
+        rest = w[3:]
+        succeed = "fail" not in rest
+        rest = [x for x in rest if x != "fail"]
+        ip = rest[0] if rest else first.get(w[2])
+        if ip is None:
+            die(f"{st}: {w[2]} has no address in the addressing table; give one (ping SRC DST A.B.C.D)")
+        tests.append({"src": w[1], "dst": w[2], "ip": ip, "succeed": succeed,
+                      "desc": f"{w[1]} {'can' if succeed else 'cannot'} ping {w[2]} ({ip})"})
+    return tests
+
+
 def compile_grade(spec):
     """grade statements -> (pka items, lab-check checks)."""
     items, checks = [], []
@@ -392,12 +458,48 @@ def compile_grade(spec):
         elif k == "hostname":               # hostname DEV NAME
             items.append({"device": w[1], "kind": "hostname", "value": w[2]})
             checks.append({"device": w[1], "desc": f"{w[1]} hostname {w[2]}", "has": [f"hostname {re.escape(w[2])}"]})
-        elif k == "line":                   # line DEV <exact running-config line>
-            dev, line = w[1], st.split(None, 2)[2].strip().strip("'\"")
-            items.append({"device": dev, "kind": "config_line", "value": line})
-            checks.append({"device": dev, "desc": f"{dev}: {line}", "has": [r"\s*".join(map(re.escape, line.split()))]})
+        elif k == "line":                   # line DEV <exact top-level running-config line>
+            dev, line = w[1], " ".join(st.split(None, 2)[2].strip().strip("'\"").split())
+            _line_item(items, checks, dev, None, line)
+        elif k == "in":                     # in DEV "PARENT LINE" "SUB-COMMAND"
+            dev, parent, line = _args(st, 4)[1:]
+            _line_item(items, checks, dev, parent, line)
         elif k == "dhcp":                   # dhcp HOST
             checks.append({"device": w[1], "desc": f"{w[1]} uses DHCP", "dhcp": True})
+        elif k == "vlan":                   # vlan SW ID NAME
+            dev, num, name = w[1], int(w[2]), w[3]
+            items.append({"device": dev, "kind": "vlan_name", "vlan": str(num), "value": name})
+            checks.append({"device": dev, "desc": f"{dev} VLAN {num} named {name}", "vlan": (num, name)})
+        elif k == "access":                 # access SW IFACE VLAN
+            dev, iface, vlan = w[1], long_if(w[2]), int(w[3])
+            items.append({"device": dev, "kind": "access_vlan", "port": iface, "value": str(vlan)})
+            parent = f"interface {iface}"
+            _line_item(items, checks, dev, parent, "switchport mode access")
+            checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} access VLAN {vlan}",
+                           "block": re.escape(parent), "has": [f"switchport access vlan {vlan}"]})
+        elif k == "trunk":                  # trunk SW IFACE [allowed LIST] [native N]
+            dev, iface = w[1], long_if(w[2])
+            opts = dict(zip(w[3::2], w[4::2]))
+            parent = f"interface {iface}"
+            _line_item(items, checks, dev, parent, "switchport mode trunk")
+            if "allowed" in opts:
+                _line_item(items, checks, dev, parent, "switchport trunk allowed vlan " + vlan_list(opts["allowed"]))
+            if "native" in opts:
+                items.append({"device": dev, "kind": "native_vlan", "port": iface, "value": str(int(opts["native"]))})
+                checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} native VLAN {opts['native']}",
+                               "block": re.escape(parent), "has": [f"switchport trunk native vlan {int(opts['native'])}"]})
+        elif k == "route":                  # route DEV PREFIX/LEN NEXT-HOP|EXIT-IFACE
+            net = ipaddress.ip_network(w[2], strict=True)
+            via = w[3] if re.fullmatch(r"[\d.]+", w[3]) else long_if(w[3])
+            _line_item(items, checks, w[1], None, f"ip route {net.network_address} {net.netmask} {via}")
+        elif k == "ospf":                   # ospf DEV PID PREFIX/LEN AREA
+            net = ipaddress.ip_network(w[3], strict=True)
+            _line_item(items, checks, w[1], f"router ospf {int(w[2])}",
+                       f"network {net.network_address} {net.hostmask} area {w[4]}")
+        elif k == "stp":                    # stp SW VLAN PRIORITY
+            _line_item(items, checks, w[1], None, f"spanning-tree vlan {vlan_list(w[2])} priority {int(w[3])}")
+        elif k == "ping":                   # graded inside Packet Tracer (Connectivity Tests tab)
+            continue
         else:
             die(f"unknown grade statement: {st}")
     return items, checks
@@ -489,6 +591,9 @@ def build(path, open_after=False, output_dir=None, force=False):
     start = build_topology(spec, configs_for(spec, "start"), pcs_for(spec, "start"))
     answer = build_topology(spec, configs_for(spec, "answer"), pcs_for(spec, "answer"))
     items, _ = compile_grade(spec)
+    tests = connectivity_tests(spec)
+    if tests:
+        ptlab.add_connectivity_tests(answer.tree, tests)
     a = {"id": 0, "title": spec["lab"]["title"], "pka_item": items, "brief": spec["lab"]["scenario"],
          "topics": spec["lab"].get("objectives", []), "level": spec["lab"].get("level", 2), "time": spec["lab"].get("time", 30)}
     pka = ptlab.build_pka(a, start.tree, answer.tree)
@@ -503,7 +608,7 @@ def build(path, open_after=False, output_dir=None, force=False):
     ptlab.write_pkt(pka, out)
     with open(os.path.join(output_root, spec["_id"] + "-answer.md"), "w", encoding="utf-8") as fh:
         fh.write(answer_guide(spec, spec.get("config", {}).get("answer", {}), items))
-    print(f"built {out}  ({len(spec['device'])} devices, {len(spec.get('link', []))} links, {len(items)} graded items, {len(pages(spec))} pages)")
+    print(f"built {out}  ({len(spec['device'])} devices, {len(spec.get('link', []))} links, {len(items)} graded items, {len(tests)} connectivity tests, {len(pages(spec))} pages)")
     if open_after:
         ptlab.open_pt(out)
     return out

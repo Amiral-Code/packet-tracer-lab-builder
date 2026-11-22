@@ -168,8 +168,10 @@ items = [
   "ip BR-R1 G0/0/1 192.168.20.1/24",
   "up BR-R1 G0/0/0",
   "up BR-R1 G0/0/1",
-  "line HQ-R1 ip route 192.168.20.0 255.255.255.0 10.0.0.2",
-  "line BR-R1 ip route 0.0.0.0 0.0.0.0 10.0.0.1",
+  "route HQ-R1 192.168.20.0/24 10.0.0.2",
+  "route BR-R1 0.0.0.0/0 10.0.0.1",
+  "ping HQ-PC1 BR-SRV1",
+  "ping HQ-PC2 BR-SRV1",
 ]
 
 debrief = """

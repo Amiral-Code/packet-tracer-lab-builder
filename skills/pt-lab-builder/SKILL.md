@@ -18,6 +18,11 @@ Write original scenarios, instructions, topologies, and faults. Do not copy NetA
 
 For the TOML structure, grading statements, device/link rules, and known serialization invariants, read [references/spec-schema.md](references/spec-schema.md). When the request includes a Physical workspace or physical cabling, also read [references/physical-mode.md](references/physical-mode.md).
 
+Grade with the most specific statement (`access`, `trunk`, `vlan`, `route`, `ospf`, `stp`, `ip`, `up`, `gw`) and use
+`line` only for unindented running-config lines; anything inside a section needs `in DEV "PARENT" "LINE"`.
+Add `ping` connectivity tests for the outcomes the lab is about (inter-VLAN, inter-site, NAT, and `fail` tests for
+ACL policy), on top of the config items.
+
 Check, then build:
 
 ```bash
