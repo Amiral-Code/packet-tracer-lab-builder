@@ -1,0 +1,177 @@
+[lab]
+id = "branch-cabling"
+title = "Patch the New Branch: Cabling in the Physical View"
+level = 1
+kind = "mixed"
+exam = "CCNA 1.3 - physical interface and cabling types"
+time = 25
+scenario = """
+The Tiznit branch office has just been fitted out. The router, switch and server are
+mounted in the rack, the PCs are on the office floor, and every device is already
+configured, but nothing is plugged in.
+
+Work in the **Physical** view: go to Tiznit, open the branch building and its wiring
+closet, and patch every device with the **right cable type** to the **right port**. The
+admin workstation connects straight to the router, with no switch in between.
+"""
+objectives = [
+  "Navigate the Physical workspace: city, building, wiring closet, rack",
+  "Choose between straight-through and crossover copper cables",
+  "Connect devices to the ports given in a cabling plan",
+  "Verify link state with show ip interface brief, link lights and ping",
+]
+
+[[site]]
+name = "Tiznit"
+city = "Tiznit"
+building = "Tiznit Branch Office"
+closet = "Branch Wiring Closet"
+rack = "Rack 1"
+devices = ["BR-R1", "BR-SW1", "BR-SRV1", "BR-PC1", "BR-PC2", "ADMIN-PC"]
+
+[[device]]
+name = "BR-R1"
+model = "router-2911"
+x = 400
+y = 140
+[[device]]
+name = "BR-SW1"
+model = "switch-2960"
+x = 400
+y = 280
+[[device]]
+name = "BR-SRV1"
+model = "server"
+x = 620
+y = 410
+[[device]]
+name = "BR-PC1"
+model = "pc"
+x = 260
+y = 410
+physical = "building"
+[[device]]
+name = "BR-PC2"
+model = "pc"
+x = 420
+y = 410
+physical = "building"
+[[device]]
+name = "ADMIN-PC"
+model = "pc"
+x = 640
+y = 140
+physical = { location = "closet" }
+
+# every cable is the student's job: none of them exists in the start network
+[[link]]
+a = "BR-R1 G0/0"
+b = "BR-SW1 G0/1"
+student = true
+[[link]]
+a = "BR-SW1 Fa0/1"
+b = "BR-PC1 Fa0"
+student = true
+[[link]]
+a = "BR-SW1 Fa0/2"
+b = "BR-PC2 Fa0"
+student = true
+[[link]]
+a = "BR-SW1 Fa0/24"
+b = "BR-SRV1 Fa0"
+student = true
+[[link]]
+a = "BR-R1 G0/2"
+b = "ADMIN-PC Fa0"
+student = true
+
+[[area]]
+label = "TIZNIT BRANCH  -  192.168.50.0/24"
+color = "yellow"
+devices = ["BR-R1", "BR-SW1", "BR-SRV1", "BR-PC1", "BR-PC2"]
+[[area]]
+label = "ADMIN  -  10.0.0.0/30"
+color = "grey"
+devices = ["ADMIN-PC"]
+
+[addressing]
+rows = [
+  ["BR-R1",    "G0/0",  "192.168.50.1/24",   ""],
+  ["BR-R1",    "G0/2",  "10.0.0.1/30",       ""],
+  ["BR-PC1",   "Fa0",   "192.168.50.11/24",  "192.168.50.1"],
+  ["BR-PC2",   "Fa0",   "192.168.50.12/24",  "192.168.50.1"],
+  ["BR-SRV1",  "Fa0",   "192.168.50.100/24", "192.168.50.1"],
+  ["ADMIN-PC", "Fa0",   "10.0.0.2/30",       "10.0.0.1"],
+]
+
+[config.answer]
+BR-R1 = """
+interface G0/0
+ description LAN to BR-SW1 G0/1
+ ip address 192.168.50.1 255.255.255.0
+ no shutdown
+interface G0/2
+ description Direct link to ADMIN-PC
+ ip address 10.0.0.1 255.255.255.252
+ no shutdown
+"""
+BR-SW1 = """
+interface G0/1
+ description Uplink to BR-R1 G0/0
+interface Fa0/1
+ description BR-PC1
+interface Fa0/2
+ description BR-PC2
+interface Fa0/24
+ description BR-SRV1
+"""
+
+[[part]]
+title = "Find the equipment"
+intro = "Switch to the Physical view (top right of the workspace) and drill down from the intercity map."
+steps = [
+  "Open **Tiznit**, then **Tiznit Branch Office**. The two office PCs sit on the floor.",
+  "Open **Branch Wiring Closet**: the admin workstation is here, next to **Rack 1**.",
+  "Open **Rack 1** and identify BR-R1 (2911), BR-SW1 (2960) and BR-SRV1.",
+]
+hint = "Back out one level with the navigation arrow at the top left of the Physical view."
+why = "Real cabling plans are written per room and per rack: knowing where a device physically sits is the first troubleshooting step."
+
+[[part]]
+title = "Patch the cables"
+intro = "Use copper cables only. Pick the type for each pair of devices before you click."
+steps = [
+  "BR-R1 **G0/0** to BR-SW1 **G0/1**.",
+  "BR-SW1 **Fa0/1** to BR-PC1, **Fa0/2** to BR-PC2, **Fa0/24** to BR-SRV1.",
+  "BR-R1 **G0/2** to ADMIN-PC. Router to PC directly: think about which cable that needs.",
+]
+hint = "Unlike devices (PC-switch, router-switch) use straight-through. Like devices, and a PC wired straight to a router, use crossover."
+why = "A straight-through cable joins a transmitting pair to a receiving pair only when the two ends use different pinouts; a PC and a router both transmit on the same pins, so they need the pairs crossed."
+
+[[part]]
+title = "Verify"
+intro = "Every link light should turn green within a few seconds (switch ports go amber first while spanning tree settles)."
+steps = [
+  "On BR-R1, `show ip interface brief`: G0/0 and G0/2 must be **up/up**.",
+  "From BR-PC1, ping BR-SRV1 (192.168.50.100). From ADMIN-PC, ping 192.168.50.100 through the router.",
+  "Click **Check Results**.",
+]
+hint = "A red link light on a router-PC cable usually means the wrong cable type; delete it and use the other one."
+why = "Link lights only prove layer 1; the pings prove the whole path, including the router forwarding between its two networks."
+
+[grade]
+items = [
+  "ping BR-PC1 BR-SRV1",
+  "ping BR-PC2 BR-R1",
+  "ping ADMIN-PC BR-SRV1",
+]
+
+debrief = """
+Every link in a network starts as a physical decision: which port, which cable. Most
+ports now auto-detect the pinout (Auto-MDIX), but routers and PCs in many labs still do
+not, which is why the crossover rule is still on the exam.
+"""
+questions = [
+  "Which links in this lab needed a crossover cable, and why?",
+  "BR-PC1 shows a green light but cannot ping the server. Name two layer 1 or 2 causes worth checking.",
+]

@@ -27,11 +27,29 @@ objectives = [
   "Diagnose six hidden faults using a structured evidence-first workflow",
 ]
 
-[physical]
+[[site]]
+name = "HQ"
 city = "Casablanca"
-building = "Northstar Network Staging Facility"
-closet = "Enterprise Lab MDF"
-rack = "Enterprise Rack A"
+building = "Northstar HQ"
+closet = "HQ Main Distribution Frame"
+rack = "HQ Rack A"
+devices = ["HQ-EDGE", "CORE1", "HQ-SW1", "HQ-SW2", "HQ-SRV1", "HQ-USER1", "HQ-OPS1"]
+
+[[site]]
+name = "Branch"
+city = "Rabat"
+building = "Northstar Rabat Branch"
+closet = "Branch Wiring Closet"
+rack = "Branch Rack"
+devices = ["BR-R1", "BR-SW1", "BR-SRV1", "BR-PC1"]
+
+[[site]]
+name = "Provider"
+city = "Casablanca"
+building = "Provider Data Centre"
+closet = "Colocation Suite"
+rack = "Customer Rack 12"
+devices = ["PUBLIC-SRV"]
 
 [[device]]
 name = "PUBLIC-SRV"
@@ -73,14 +91,14 @@ name = "HQ-USER1"
 model = "pc"
 x = 430
 y = 540
-physical = { location = "building", x = 86, y = 215 }
+physical = "building"
 
 [[device]]
 name = "HQ-OPS1"
 model = "pc"
 x = 650
 y = 540
-physical = { location = "building", x = 172, y = 215 }
+physical = "building"
 
 [[device]]
 name = "HQ-SRV1"
@@ -108,7 +126,7 @@ name = "BR-PC1"
 model = "pc"
 x = 960
 y = 540
-physical = { location = "building", x = 258, y = 215 }
+physical = "building"
 
 [[device]]
 name = "BR-SRV1"

@@ -264,10 +264,15 @@ def layout(spec):
         x0 += width * XSTEP + GAP
 
 
-def build_topology(spec, configs, pcs):
+def build_topology(spec, configs, pcs, which="answer"):
+    """which = "start" leaves out the cables the student must add (links with student = true)."""
     layout(spec)
     t = ptbuild.Topology()
     t.configure_physical(spec.get("physical", {}))
+    site_of = {}
+    if spec.get("site"):
+        t.configure_sites(spec["site"])
+        site_of = {n: st["name"] for st in spec["site"] for n in st.get("devices", [])}
     pos = {d["name"]: (d["x"], d["y"]) for d in spec["device"]}
     for a in spec.get("area", []):  # areas first, so they sit behind the devices
         xs = [pos[n][0] for n in a["devices"]]
@@ -278,10 +283,12 @@ def build_topology(spec, configs, pcs):
         t.note(a["label"], x1 + 8, y1 + 6)
     models = {}
     for d in spec["device"]:
-        t.add(d["model"], d["name"], d["x"], d["y"], d.get("physical"))
+        t.add(d["model"], d["name"], d["x"], d["y"], d.get("physical"), site=site_of.get(d["name"]))
         models[d["name"]] = d["model"]
     cidr = {(r[0], long_if(r[1])): r[2] for r in addressing_rows(spec)}
     for lk in spec.get("link", []):
+        if which == "start" and lk.get("student"):
+            continue
         (na, pa), (nb, pb) = lk["a"].split(None, 1), lk["b"].split(None, 1)
         pa, pb = long_if(pa), long_if(pb)
         cable = lk.get("cable") or cable_for(models[na], models[nb], pa, pb)
@@ -370,7 +377,7 @@ def pcs_for(spec, which):
 
 # ---------------------------------------------------------------- grading statements
 GRADE_STATEMENTS = ("ip", "up", "gw", "hostname", "line", "in", "dhcp", "vlan", "access", "trunk", "route",
-                    "ospf", "stp", "ping")
+                    "ospf", "stp", "ping", "cable")
 
 
 def _args(statement, n):
@@ -500,9 +507,32 @@ def compile_grade(spec):
             _line_item(items, checks, w[1], None, f"spanning-tree vlan {vlan_list(w[2])} priority {int(w[3])}")
         elif k == "ping":                   # graded inside Packet Tracer (Connectivity Tests tab)
             continue
+        elif k == "cable":                  # cable DEV PORT DEV PORT (also implied by every student = true link)
+            _cable_item(items, checks, spec, w[1], w[2], w[3], w[4])
         else:
             die(f"unknown grade statement: {st}")
+    graded = {frozenset({(w[1], long_if(w[2])), (w[3], long_if(w[4]))})
+              for w in (st.split() for st in spec.get("grade", {}).get("items", [])) if w[0] == "cable"}
+    for lk in spec.get("link", []):          # every cable the student must add is graded
+        if lk.get("student"):
+            (na, pa), (nb, pb) = lk["a"].split(None, 1), lk["b"].split(None, 1)
+            if frozenset({(na, long_if(pa)), (nb, long_if(pb))}) not in graded:
+                _cable_item(items, checks, spec, na, pa, nb, pb)
     return items, checks
+
+
+def _cable_item(items, checks, spec, a, pa, b, pb):
+    pa, pb = long_if(pa), long_if(pb)
+    models = {d["name"]: d["model"] for d in spec["device"]}
+    link = next((lk for lk in spec.get("link", []) if frozenset(
+        {(lk["a"].split(None, 1)[0], long_if(lk["a"].split(None, 1)[1])),
+         (lk["b"].split(None, 1)[0], long_if(lk["b"].split(None, 1)[1]))}) == frozenset({(a, pa), (b, pb)})), {})
+    want = link.get("cable") or (cable_for(models[a], models[b], pa, pb) if a in models and b in models else None)
+    for dev, port in ((a, pa), (b, pb)):
+        if not ptbuild_model_is_host(models.get(dev, "")):
+            items.append({"device": dev, "kind": "port_on", "port": port})
+    checks.append({"device": a, "desc": f"cable {a} {short_if(pa)} - {b} {short_if(pb)}"
+                   + (f" ({want.removeprefix('e')})" if want else ""), "cable": (a, pa, b, pb), "cable_type": want})
 
 
 # ---------------------------------------------------------------- instructions
@@ -561,6 +591,15 @@ def answer_guide(spec, answer_cfg_snippets, items):
         for i, f in enumerate(spec["fault"], 1):
             lines += [f"{i}. **{f['device']}** - {f.get('symptom', '')}", f"   - {f.get('explain', '')}"]
         lines.append("")
+    student = [lk for lk in spec.get("link", []) if lk.get("student")]
+    if student:
+        models = {d["name"]: d["model"] for d in spec["device"]}
+        lines += ["## Cabling", "", "| From | To | Cable |", "|---|---|---|"]
+        for lk in student:
+            (na, pa), (nb, pb) = lk["a"].split(None, 1), lk["b"].split(None, 1)
+            cable = lk.get("cable") or cable_for(models[na], models[nb], long_if(pa), long_if(pb))
+            lines.append(f"| {na} {pa} | {nb} {pb} | {cable.removeprefix('e')} |")
+        lines.append("")
     lines += ["## Reference configuration", ""]
     for name, text in answer_cfg_snippets.items():
         if text.strip():
@@ -588,7 +627,7 @@ def build(path, open_after=False, output_dir=None, force=False):
     spec = load_spec(path)
     if not verify(copy.deepcopy(spec)) and not force:
         die("not built: fix the errors above (or pass --force to build anyway)")
-    start = build_topology(spec, configs_for(spec, "start"), pcs_for(spec, "start"))
+    start = build_topology(spec, configs_for(spec, "start"), pcs_for(spec, "start"), "start")
     answer = build_topology(spec, configs_for(spec, "answer"), pcs_for(spec, "answer"))
     items, _ = compile_grade(spec)
     tests = connectivity_tests(spec)
@@ -605,6 +644,8 @@ def build(path, open_after=False, output_dir=None, force=False):
     output_root = os.fspath(output_dir or work_dir())
     os.makedirs(output_root, exist_ok=True)
     out = os.path.join(output_root, spec["_id"] + ".pka")
+    for opt in pka.getroot().iter("ENABLE_CABLE_LENGTH_EFFECTS"):
+        opt.text = "false"   # distances between generated buildings must never take links down
     ptlab.write_pkt(pka, out)
     with open(os.path.join(output_root, spec["_id"] + "-answer.md"), "w", encoding="utf-8") as fh:
         fh.write(answer_guide(spec, spec.get("config", {}).get("answer", {}), items))

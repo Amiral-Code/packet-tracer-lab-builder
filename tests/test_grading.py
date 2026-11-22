@@ -111,6 +111,43 @@ class GradeStatements(unittest.TestCase):
         self.assertEqual(pdu.find("DESTINATION").get("device"), ptlab.devices(t)["R1"].findtext("ENGINE/SAVE_REF_ID"))
 
 
+def with_cable(t, a, pa, b, pb, kind):
+    devs = ptlab.devices(t)
+    links = t.getroot().find("NETWORK/LINKS")
+    if links is None:
+        links = ET.SubElement(t.getroot().find("NETWORK"), "LINKS")
+    cable = ET.SubElement(ET.SubElement(links, "LINK"), "CABLE")
+    ET.SubElement(cable, "FROM").text = devs[a].findtext("ENGINE/SAVE_REF_ID")
+    ET.SubElement(cable, "PORT").text = pa
+    ET.SubElement(cable, "TO").text = devs[b].findtext("ENGINE/SAVE_REF_ID")
+    ET.SubElement(cable, "PORT").text = pb
+    ET.SubElement(cable, "TYPE").text = kind
+    return t
+
+
+class Cabling(unittest.TestCase):
+    SPEC = {"lab": {"title": "t", "scenario": "s", "kind": "mixed"},
+            "device": [{"name": "R1", "model": "router-2911"}, {"name": "PC1", "model": "pc"}],
+            "link": [{"a": "R1 G0/2", "b": "PC1 Fa0", "student": True}], "grade": {"items": []}}
+
+    def grade(self, t):
+        items, checks = labgen.compile_grade(self.SPEC)
+        return items, ptlab.grade({"check": checks}, t, checks, quiet=True)
+
+    def test_student_link_is_graded_by_port_up_and_cable(self):
+        items, res = self.grade(tree(device("R1", R1), device("PC1", "")))
+        self.assertEqual([(i["device"], i["kind"]) for i in items], [("R1", "port_on")])
+        self.assertEqual(res, [False])
+
+    def test_right_cable_passes_wrong_type_fails(self):
+        ok = with_cable(tree(device("R1", R1), device("PC1", "")), "PC1", "FastEthernet0", "R1",
+                        "GigabitEthernet0/2", "eCrossOver")
+        self.assertEqual(self.grade(ok)[1], [True])
+        wrong = with_cable(tree(device("R1", R1), device("PC1", "")), "R1", "GigabitEthernet0/2", "PC1",
+                           "FastEthernet0", "eStraightThrough")
+        self.assertEqual(self.grade(wrong)[1], [False])
+
+
 class MergeSections(unittest.TestCase):
     def test_router_id_stays_inside_router_ospf(self):
         out = labgen.merge(["version 15.1", "!", "end"], "router ospf 10\n router-id 2.2.2.2\n network 10.0.0.0 0.0.0.3 area 0\n")

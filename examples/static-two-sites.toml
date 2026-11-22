@@ -44,13 +44,13 @@ name = "HQ-PC1"
 model = "pc"
 x = 110
 y = 410
-physical = { location = "building", x = 86, y = 215 }
+physical = "building"
 [[device]]
 name = "HQ-PC2"
 model = "pc"
 x = 290
 y = 410
-physical = { location = "building", x = 172, y = 215 }
+physical = "building"
 [[device]]
 name = "BR-R1"
 model = "router-isr4331"

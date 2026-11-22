@@ -11,6 +11,7 @@ INDEX = {
     "router-2911": {"interfaces": ["GigabitEthernet0/0", "GigabitEthernet0/1", "GigabitEthernet0/2", "Vlan1"]},
     "switch-2960": {"interfaces": ["FastEthernet0/1", "FastEthernet0/2", "GigabitEthernet0/1", "Vlan1"]},
     "pc": {"interfaces": ["FastEthernet0"]},
+    "server": {"interfaces": ["FastEthernet0"]},
 }
 
 GOOD = {
@@ -90,6 +91,23 @@ class LintTests(unittest.TestCase):
 
     def test_no_grade_items(self):
         self.assertError(lambda s: s["grade"].update(items=[]), "score nothing")
+
+    def test_sites_are_checked(self):
+        self.assertError(lambda s: s.update(site=[{"name": "HQ", "devices": ["R1", "R9"]}]), "unknown device R9")
+        self.assertError(lambda s: s.update(site=[{"name": "HQ", "devices": ["R1"]},
+                                                  {"name": "BR", "devices": ["R1"]}]), "in two sites")
+
+    def test_full_rack_is_rejected(self):
+        def fill(s):
+            s["device"] += [{"name": f"SRV{i}", "model": "server"} for i in range(7)]
+        self.assertError(fill, "is full")
+
+    def test_racks_are_per_site(self):
+        def split(s):
+            s["device"] += [{"name": f"SRV{i}", "model": "server"} for i in range(8)]
+            s["site"] = [{"name": "A", "devices": [f"SRV{i}" for i in range(4)]},
+                         {"name": "B", "devices": [f"SRV{i}" for i in range(4, 8)]}]
+        self.assertFalse([e for e in self.lint(split).errors if "full" in e])
 
     def test_subinterface_and_svi_are_allowed(self):
         spec_errors = self.lint(lambda s: s["addressing"]["rows"].append(["SW1", "Vlan99", "10.99.0.2/24", ""])).errors

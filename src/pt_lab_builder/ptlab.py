@@ -115,9 +115,28 @@ def blocks(lines):
     return out
 
 
-def run_check(c, devs):
+def cables(tree):
+    """{frozenset({(device, port), (device, port)}): cable type} for every cable in a network."""
+    names = {d.findtext("ENGINE/SAVE_REF_ID"): d.findtext("ENGINE/NAME") for d in tree.getroot().iter("DEVICE")}
+    out = {}
+    for lk in tree.getroot().findall("NETWORK/LINKS/LINK"):
+        c = lk.find("CABLE")
+        if c is None:
+            continue
+        ports = [p.text for p in c.findall("PORT")]
+        if len(ports) == 2:
+            ends = frozenset({(names.get(c.findtext("FROM")), ports[0]), (names.get(c.findtext("TO")), ports[1])})
+            out[ends] = c.findall("TYPE")[-1].text if c.findall("TYPE") else None
+    return out
+
+
+def run_check(c, devs, links=None):
     if "any" in c:  # several valid ways to do it: one of the sub-checks must pass
-        return any(run_check({"device": c["device"], **sub}, devs) for sub in c["any"])
+        return any(run_check({"device": c["device"], **sub}, devs, links) for sub in c["any"])
+    if "cable" in c:  # a cable between exactly these two ports, of the expected type when one is given
+        (a, pa, b, pb), want = c["cable"], c.get("cable_type")
+        got = (links or {}).get(frozenset({(a, pa), (b, pb)}), False)
+        return got is not False and (want is None or got == want)
     d = devs.get(c["device"])
     if d is None:
         return False
@@ -163,7 +182,8 @@ def run_check(c, devs):
 def grade(a, tree, checks=None, quiet=False):
     devs = devices(tree)
     checks = checks if checks is not None else a["check"]
-    res = [run_check(c, devs) for c in checks]
+    links = cables(tree)
+    res = [run_check(c, devs, links) for c in checks]
     if not quiet:
         for c, ok in zip(checks, res):
             print(f"  {G + 'ok  ' if ok else R + 'FAIL'}{Z} {c['desc']}")

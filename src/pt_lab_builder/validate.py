@@ -15,7 +15,7 @@ import json
 import re
 import shlex
 
-from . import labgen, ptlab
+from . import labgen, ptbuild, ptlab
 from .paths import library_dir
 
 NON_PHYSICAL = ("Vlan", "Loopback", "Tunnel", "Port-channel")
@@ -45,6 +45,20 @@ class Issues(list):
 def _index():
     with open(library_dir() / "devices" / "index.json", encoding="utf-8") as fh:
         return json.load(fh)
+
+
+def _base_rack_reserved():
+    """Spans already taken in the base rack (its power distribution unit)."""
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.parse(library_dir() / "base.xml").getroot()
+    except (OSError, ET.ParseError):
+        return []
+    for node in root.iter("NODE"):
+        if node.findtext("TYPE") == "4":
+            return [(int(float(c.findtext("X") or 0)), int(float(c.findtext("X") or 0)) + ptbuild.DEFAULT_RACK_UNITS)
+                    for c in node.findall("CHILDREN/NODE")]
+    return []
 
 
 def _port_ok(ports, iface):
@@ -111,6 +125,52 @@ def lint(spec) -> Issues:
                     issues.error(f"{ep[0]} {labgen.short_if(ep[1])} is cabled twice (links {used[ep]} and {i})")
                 used[ep] = i
                 cabled.add(ep)
+
+    # sites: each device in at most one site; unlisted devices go to the first site
+    sites = spec.get("site", [])
+    site_of = {}
+    for st in sites:
+        if not st.get("name"):
+            issues.error("a [[site]] has no name")
+            continue
+        for n in st.get("devices", []):
+            if n not in model:
+                issues.error(f"site {st['name']!r}: unknown device {n}")
+            elif n in site_of:
+                issues.error(f"{n} is in two sites ({site_of[n]!r} and {st['name']!r})")
+            else:
+                site_of[n] = st["name"]
+    if len({st.get("name") for st in sites}) != len(sites):
+        issues.error("two [[site]] tables share a name")
+    first_site = sites[0]["name"] if sites else None
+
+    x1, y1, x2, y2 = ptbuild.CLOSET_ICON
+    for d in spec.get("device", []):
+        ph = d.get("physical")
+        if isinstance(ph, dict) and ph.get("location") == "building" and "x" in ph and "y" in ph \
+                and x1 <= ph["x"] <= x2 and y1 <= ph["y"] <= y2:
+            issues.warn(f"{d['name']}: building position ({ph['x']}, {ph['y']}) is under the wiring-closet icon; "
+                        f"use x > {x2} or y > {y2}, or omit x/y for the automatic floor grid")
+
+    # racks: generated devices stacked by measured model height must fit, per site
+    racks = {}
+    for d in spec.get("device", []):
+        ph = d.get("physical")
+        ph = {"location": ph} if isinstance(ph, str) else dict(ph or {})
+        rackable = str(d.get("model", "")).startswith(("router", "switch", "l3switch", "wlc", "server"))
+        if ph.get("location", "rack" if rackable else "building") == "rack" and "x" not in ph:
+            racks.setdefault(site_of.get(d.get("name"), first_site), []).append((d.get("name"), d.get("model"), ph.get("slot")))
+    for site, rack in racks.items():
+        reserved = _base_rack_reserved() if site == first_site else []
+        xs = ptbuild.stack_rack([(m, sl) for _, m, sl in rack], reserved)
+        over = [f"{n} ({m}, needs {ptbuild.rack_units(m)} units at {xs[i]})" for i, (n, m, _) in enumerate(rack)
+                if xs[i] + ptbuild.rack_units(m) > ptbuild.RACK_CAPACITY]
+        if over:
+            used = max(xs[i] + ptbuild.rack_units(m) for i, (_, m, _) in enumerate(rack))
+            where = f"site {site!r}'s rack" if site else "the rack"
+            issues.error(f"{where} is full ({used} of {ptbuild.RACK_CAPACITY} units needed): "
+                         f"{'; '.join(over)} would hang below it. Move devices to "
+                         f"physical = {{ location = \"closet\" }} or split them into [[site]] racks")
 
     # areas
     in_area = {}
@@ -213,7 +273,7 @@ def _statement_problem(w, st, model, ports, first_addr):
     """Shape errors for one grade statement, or None."""
     k = w[0]
     need = {"ip": 4, "up": 3, "gw": 3, "hostname": 3, "dhcp": 2, "vlan": 4, "access": 4, "route": 4,
-            "ospf": 5, "stp": 4}
+            "ospf": 5, "stp": 4, "cable": 5}
     if k in need and len(w) != need[k]:
         return f"expects {need[k] - 1} fields after '{k}'"
     try:
@@ -245,6 +305,12 @@ def _statement_problem(w, st, model, ports, first_addr):
             labgen.vlan_list(w[2])
             if int(w[3]) % 4096 or not 0 <= int(w[3]) <= 61440:
                 return "priority must be a multiple of 4096 from 0 to 61440"
+        if k == "cable":
+            if w[3] not in model:
+                return f"unknown device {w[3]}"
+            for dev, port in ((w[1], w[2]), (w[3], w[4])):
+                if labgen.long_if(port) not in ports[dev]:
+                    return f"{dev} has no port {labgen.long_if(port)}"
         if k == "ping":
             rest = [x for x in w[3:] if x != "fail"]
             if len(w) < 3 or w[2] not in model:
@@ -260,7 +326,7 @@ def _statement_problem(w, st, model, ports, first_addr):
 
 def _grade(spec, which, s=None):
     s = s or spec
-    t = labgen.build_topology(s, labgen.configs_for(s, which), labgen.pcs_for(s, which))
+    t = labgen.build_topology(s, labgen.configs_for(s, which), labgen.pcs_for(s, which), which)
     _, checks = labgen.compile_grade(spec)
     return checks, ptlab.grade({"check": checks}, t.tree, checks, quiet=True)
 

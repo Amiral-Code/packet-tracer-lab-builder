@@ -6,7 +6,7 @@ This project is independent of Cisco. Cisco Packet Tracer and Cisco device data 
 
 ## Current status
 
-The project is an alpha. Logical topology generation, configuration/troubleshooting activities, instruction pages, grading (addresses, interface state, VLANs, access and trunk ports, static and OSPF routes, STP priority, any running-config line, and Packet Tracer connectivity tests), and single-building Physical placement work. Hierarchical multi-site Physical layouts and grading of rack placement or student-created cabling are planned, but are not yet implemented.
+The project is an alpha. Logical topology generation, configuration/troubleshooting activities, instruction pages, grading (addresses, interface state, VLANs, access and trunk ports, static and OSPF routes, STP priority, any running-config line, and Packet Tracer connectivity tests), and Physical placement work. Multi-site Physical layouts and student cabling labs work; grading of rack position is not implemented.
 
 ## Requirements
 
@@ -82,27 +82,24 @@ Packet Tracer covers CCNA well and part of ENCOR. Describe advanced activities a
 
 ## Physical mode
 
-The generator removes ghost devices inherited from source templates, places routers/switches/controllers/servers into distinct rack positions, and distributes endpoints across the building. Specs can rename the inherited containers and override device placement:
+Each `[[site]]` becomes its own building, wiring closet and rack, in its own city when the city name differs. Rack equipment is stacked from the top by real model height (measured in Packet Tracer 9.0.1), endpoints are placed on the building floor, and `ptlab lint` rejects a rack that overflows.
 
 ```toml
-[physical]
+[[site]]
+name = "HQ"
 city = "Casablanca"
-building = "Headquarters"
-closet = "Main Distribution Frame"
-rack = "Rack 1"
+building = "Northstar HQ"
+devices = ["HQ-EDGE", "CORE1", "HQ-SW1", "HQ-PC1"]
 
-[[device]]
-name = "CORE1"
-model = "l3switch-3650"
-physical = { location = "rack", slot = 2 }
-
-[[device]]
-name = "PC1"
-model = "pc"
-physical = { location = "building", x = 172, y = 215 }
+[[site]]
+name = "Branch"
+city = "Rabat"
+devices = ["BR-R1", "BR-SW1", "BR-PC1"]
 ```
 
-See [the specification reference](skills/pt-lab-builder/references/spec-schema.md) and [Physical-mode boundaries](skills/pt-lab-builder/references/physical-mode.md).
+**Cabling labs:** a link marked `student = true` is missing from the start network. Packet Tracer grades it through Port Up on both ends (add `ping` tests for the end-to-end result), and `ptlab check` verifies the cable's ports and type in the saved file. See `examples/branch-cabling.toml`.
+
+See [the specification reference](skills/pt-lab-builder/references/spec-schema.md) and [Physical mode](skills/pt-lab-builder/references/physical-mode.md).
 
 ## Development
 

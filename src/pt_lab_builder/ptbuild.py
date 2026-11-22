@@ -70,6 +70,51 @@ def physical_path(root, target):
     raise ValueError("physical node is not attached to the workspace")
 
 
+# Rack geometry, measured in Packet Tracer 9.0.1 (a calibration rack of every model, 16 units apart):
+# a rack node's X is the device's offset from the top of the rack, about 6.4 px per unit; 1RU gear draws
+# ~3 units, the 2911 ~5.5, the 1941 ~12, and anything from about X=128 lands on the rack's bottom frame.
+# Heights below include a small gap. Server-PT matches the 20-unit pitch of Packet Tracer's own samples.
+RACK_CAPACITY = 124
+RACK_UNITS = {"router-1941": 12, "router-2911": 7, "server": 20, "router-pt": 12, "router-pt-empty": 12}
+DEFAULT_RACK_UNITS = 4
+FLOOR_X, FLOOR_Y = 470, 120               # first free floor position beside the wiring closet
+CLOSET_ICON = (40, 40, 400, 400)          # x1, y1, x2, y2 the closet icon covers in the building view
+
+
+def rack_units(key):
+    return RACK_UNITS.get(key, DEFAULT_RACK_UNITS)
+
+
+def stack_rack(entries, reserved=()):
+    """entries: [(key, slot or None)] in spec order -> {index: X}. Devices with a slot come first, by slot
+    (1 = top), then the rest in spec order; each takes its model's height and skips reserved spans
+    (equipment already in the base rack, such as its power distribution unit)."""
+    order = sorted(range(len(entries)), key=lambda i: (entries[i][1] is None, entries[i][1] or 0, i))
+    spans = sorted(reserved)
+    pos, out = 0, {}
+    for i in order:
+        h = rack_units(entries[i][0])
+        moved = True
+        while moved:
+            moved = False
+            for a, b in spans:
+                if pos < b and pos + h > a:
+                    pos, moved = b, True
+        out[i] = pos
+        pos += h
+    return out
+
+
+def first_node_in(node, kind):
+    return next((n for n in node.iter("NODE") if n.findtext("TYPE") == str(kind)), None)
+
+
+def _renew_uuids(node):
+    for n in node.iter("NODE"):
+        if n.find("UUID_STR") is not None:
+            n.find("UUID_STR").text = "{%s}" % uuid.uuid4()
+
+
 def first_physical_node(root, kind):
     return next((node for node in root.findall(".//NODE") if node.findtext("TYPE") == str(kind)), None)
 
@@ -172,11 +217,67 @@ class Topology:
             if node.findtext("TYPE") == "6" and node is not self._phys_tpl and uid not in live:
                 parent[node].remove(node)
         self._phys_parent.remove(self._phys_tpl)        # the base file's own PC node is only a template
-        self._building = first_physical_node(self.root, 2)
-        self._closet = first_physical_node(self.root, 3)
-        self._rack = first_physical_node(self.root, 4)
-        self._physical_counts = {"rack": 1, "closet": 0, "building": 0}
+        rack = first_physical_node(self.root, 4)
+        # one site to start with: the base's own building/closet/rack (its rack keeps the power unit)
+        self._sites = {None: self._site(first_physical_node(self.root, 2), first_physical_node(self.root, 3), rack,
+                                        reserved=[(int(float(c.findtext("X") or 0)),
+                                                   int(float(c.findtext("X") or 0)) + DEFAULT_RACK_UNITS)
+                                                  for c in (rack.findall("CHILDREN/NODE") if rack is not None else [])])}
+        self._default_site = None
         self._link_tpl = None
+
+    @staticmethod
+    def _site(building, closet, rack, reserved=()):
+        return {"building": building, "closet": closet, "rack": rack, "reserved": list(reserved),
+                "counts": {"rack": 0, "closet": 0, "building": 0}, "rack_items": []}
+
+    def configure_sites(self, sites):
+        """[{name, city?, building?, closet?, rack?}, ...]: the first site renames the base's containers; every
+        further site gets its own copy of building > wiring closet > rack (new UUIDs, no inherited devices),
+        in the same city as an earlier site with that city name, or in a new city."""
+        city0 = first_physical_node(self.root, 1)
+        base = self._sites.pop(None)
+        cities = {}
+        for i, site in enumerate(sites):
+            name = site["name"]
+            city_name = site.get("city") or (city0.findtext("NAME") if city0 is not None else "City")
+            if i == 0:
+                st = base
+                if city0 is not None:
+                    city0.find("NAME").text = city_name
+                cities[city_name] = city0
+            else:
+                city = cities.get(city_name)
+                if city is None:                       # a new city beside the first one
+                    city = copy.deepcopy(city0)
+                    kids = city.find("CHILDREN")
+                    for k in list(kids):
+                        kids.remove(k)
+                    _renew_uuids(city)
+                    city.find("NAME").text = city_name
+                    city.find("X").text = str(200 + 700 * len(cities))
+                    city.find("Y").text = "200"
+                    first_physical_node(self.root, 0).find("CHILDREN").append(city)
+                    cities[city_name] = city
+                building = copy.deepcopy(base["building"])
+                for holder in building.iter("CHILDREN"):  # drop inherited devices (power unit, PCs)
+                    for k in list(holder):
+                        if k.findtext("TYPE") == "6":
+                            holder.remove(k)
+                _renew_uuids(building)
+                in_city = sum(1 for k in city.find("CHILDREN").findall("NODE") if k.findtext("TYPE") == "2")
+                building.find("X").text = str(100 + 300 * in_city)
+                building.find("Y").text = "100"
+                city.find("CHILDREN").append(building)
+                st = self._site(building, first_node_in(building, 3), first_node_in(building, 4))
+            for kind, field, default in ((2, "building", name), (3, "closet", f"{name} Wiring Closet"),
+                                         (4, "rack", f"{name} Rack")):
+                node = st[field]
+                if node is not None:
+                    node.find("NAME").text = str(site.get(field) or default)
+            self._sites[name] = st
+            if i == 0:
+                self._default_site = name
 
     def configure_physical(self, settings):
         """Rename the inherited city/building/closet/rack containers."""
@@ -187,7 +288,7 @@ class Topology:
                 if node is not None:
                     node.find("NAME").text = str(value)
 
-    def add(self, key, name, x, y, physical=None):
+    def add(self, key, name, x, y, physical=None, site=None):
         tpl = ET.parse(self.lib / "devices" / (key + ".xml")).getroot()
         d = clone_device(self.root, tpl, name, x, y, self.macs)
         n = copy.deepcopy(self._phys_tpl)
@@ -196,7 +297,8 @@ class Topology:
         n.find("NAME").text = name
         placement = {"location": physical} if isinstance(physical, str) else dict(physical or {})
         default = "rack" if key.startswith(("router", "switch", "l3switch", "wlc", "server")) else "building"
-        targets = {"rack": self._rack, "closet": self._closet, "building": self._building}
+        st = self._sites[site if site is not None else self._default_site]
+        targets = {"rack": st["rack"], "closet": st["closet"], "building": st["building"]}
         available = [k for k, v in targets.items() if v is not None]
         location = placement.get("location", default)
         if location not in targets:
@@ -212,16 +314,22 @@ class Topology:
         children = target.find("CHILDREN")
         if children is None:
             children = ET.SubElement(target, "CHILDREN")
-        index = self._physical_counts[location]
-        self._physical_counts[location] += 1
+        index = st["counts"][location]
+        st["counts"][location] += 1
         if location == "rack":
-            slot = int(placement.get("slot", index))
-            px, py = slot * 4, 0
+            px, py = 0, 0     # stacked below by model height
         else:
-            px, py = 86 + (index % 5) * 86, 215 + (index // 5) * 80
+            # the wiring-closet icon covers about x/y 50-395 of the building view (1 unit ~ 1 px in PT 9.0.1):
+            # endpoints go on a grid to its right
+            px, py = FLOOR_X + (index % 5) * 110, FLOOR_Y + (index // 5) * 110
         n.find("X").text = str(placement.get("x", px))
         n.find("Y").text = str(placement.get("y", py))
         children.append(n)
+        if location == "rack" and "x" not in placement:
+            st["rack_items"].append((n, key, placement.get("slot")))
+            xs = stack_rack([(k, sl) for _, k, sl in st["rack_items"]], st["reserved"])
+            for i, (node, _, _) in enumerate(st["rack_items"]):
+                node.find("X").text = str(xs[i])
         d.find("WORKSPACE/PHYSICAL").text = ",".join(physical_path(self.root, target) + [u])
         self.devices[name] = d
         self.keys[name] = key
