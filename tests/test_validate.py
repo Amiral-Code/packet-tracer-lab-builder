@@ -99,7 +99,7 @@ class LintTests(unittest.TestCase):
 
     def test_full_rack_is_rejected(self):
         def fill(s):
-            s["device"] += [{"name": f"SRV{i}", "model": "server"} for i in range(7)]
+            s["device"] += [{"name": f"SRV{i}", "model": "server"} for i in range(9)]
         self.assertError(fill, "is full")
 
     def test_racks_are_per_site(self):

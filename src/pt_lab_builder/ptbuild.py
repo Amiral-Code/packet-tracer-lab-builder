@@ -70,12 +70,13 @@ def physical_path(root, target):
     raise ValueError("physical node is not attached to the workspace")
 
 
-# Rack geometry, measured in Packet Tracer 9.0.1 (a calibration rack of every model, 16 units apart):
-# a rack node's X is the device's offset from the top of the rack, about 6.4 px per unit; 1RU gear draws
-# ~3 units, the 2911 ~5.5, the 1941 ~12, and anything from about X=128 lands on the rack's bottom frame.
-# Heights below include a small gap. Server-PT matches the 20-unit pitch of Packet Tracer's own samples.
+# Rack geometry, measured in Packet Tracer 9.0.1 from two calibration racks (every model 16 units apart, then
+# stacked): a rack node's X is the device's offset from the top of the rack, about 6.5 px per unit. Drawn
+# heights: 1RU gear ~3 units, 2911 ~5.3, 1941 ~6.4, Server-PT ~13; the WLC 2504/3504 sit on a shelf tray. From
+# about X=128 a device lands on the rack's bottom frame. Heights below include a small gap.
 RACK_CAPACITY = 124
-RACK_UNITS = {"router-1941": 12, "router-2911": 7, "server": 20, "router-pt": 12, "router-pt-empty": 12}
+RACK_UNITS = {"router-1941": 7, "router-2911": 6, "server": 14, "wlc-2504": 5, "wlc-3504": 5,
+              "router-pt": 12, "router-pt-empty": 12}
 DEFAULT_RACK_UNITS = 4
 FLOOR_X, FLOOR_Y = 470, 120               # first free floor position beside the wiring closet
 CLOSET_ICON = (40, 40, 400, 400)          # x1, y1, x2, y2 the closet icon covers in the building view
