@@ -5,11 +5,15 @@ import unittest
 import xml.etree.ElementTree as ET
 from unittest.mock import patch
 
-from pt_lab_builder import labgen
+from pt_lab_builder import labgen, library
 from pt_lab_builder import paths
 
 
 class CoreTests(unittest.TestCase):
+    def test_locally_observed_router_models_are_recognized(self):
+        self.assertEqual(library.WANT[("Router", "ISR4321")], "router-isr4321")
+        self.assertEqual(library.WANT[("Router", "1841")], "router-1841")
+
     def test_interface_name_round_trip(self):
         self.assertEqual(labgen.long_if("G0/0/1"), "GigabitEthernet0/0/1")
         self.assertEqual(labgen.short_if("FastEthernet0/24"), "Fa0/24")

@@ -12,7 +12,9 @@ import xml.etree.ElementTree as ET
 
 from .paths import codec_path, library_dir
 WANT = {  # (TYPE, model) -> library key
-    ("Router", "2911"): "router-2911", ("Router", "ISR4331"): "router-isr4331", ("Router", "1941"): "router-1941",
+    ("Router", "2911"): "router-2911", ("Router", "ISR4331"): "router-isr4331",
+    ("Router", "ISR4321"): "router-isr4321", ("Router", "1941"): "router-1941",
+    ("Router", "1841"): "router-1841",
     ("Router", "2901"): "router-2901", ("Router", "2811"): "router-2811", ("Router", "Router-PT"): "router-pt",
     ("Router", "Router-PT-Empty"): "router-pt-empty",
     ("Switch", "2960-24TT"): "switch-2960", ("MultiLayerSwitch", "3560-24PS"): "l3switch-3560",

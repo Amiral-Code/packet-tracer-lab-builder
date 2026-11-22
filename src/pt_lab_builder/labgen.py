@@ -379,8 +379,10 @@ def pcs_for(spec, which):
 
 
 # ---------------------------------------------------------------- grading statements
+TCP_PORTS = {"http": 80, "https": 443, "ssh": 22, "telnet": 23}
+CONNECTIVITY_STATEMENTS = ("ping", "tcp", *TCP_PORTS)
 GRADE_STATEMENTS = ("ip", "up", "gw", "hostname", "line", "in", "dhcp", "vlan", "access", "trunk", "route",
-                    "ospf", "stp", "ping", "cable")
+                    "ospf", "stp", *CONNECTIVITY_STATEMENTS, "cable")
 
 
 def _args(statement, n):
@@ -419,25 +421,40 @@ def _line_item(items, checks, dev, parent, line):
 
 
 def connectivity_tests(spec):
-    """ping SRC DST [IP] [fail] -> tests for the Connectivity Tests tab. DST's address defaults to its first
-    address in the addressing table."""
+    """Compile ICMP and TCP outcome statements for Packet Tracer's Connectivity Tests tab."""
     first = {}
     for row in addressing_rows(spec):
         if len(row) >= 3 and row[2] and row[2].lower() != "dhcp":
             first.setdefault(row[0], str(ipaddress.ip_interface(row[2]).ip))
     tests = []
+    points = spec.get("grade", {}).get("points", {})
     for st in spec.get("grade", {}).get("items", []):
         w = st.split()
-        if w[0] != "ping":
+        if w[0] not in CONNECTIVITY_STATEMENTS:
             continue
-        rest = w[3:]
+        kind = w[0]
+        protocol = "icmp" if kind == "ping" else "tcp"
+        port = None
+        rest_at = 3
+        if kind == "tcp":
+            port = int(w[3])
+            rest_at = 4
+        elif kind in TCP_PORTS:
+            port = TCP_PORTS[kind]
+        rest = w[rest_at:]
         succeed = "fail" not in rest
         rest = [x for x in rest if x != "fail"]
         ip = rest[0] if rest else first.get(w[2])
         if ip is None:
-            die(f"{st}: {w[2]} has no address in the addressing table; give one (ping SRC DST A.B.C.D)")
-        tests.append({"src": w[1], "dst": w[2], "ip": ip, "succeed": succeed,
-                      "desc": f"{w[1]} {'can' if succeed else 'cannot'} ping {w[2]} ({ip})"})
+            die(f"{st}: {w[2]} has no address in the addressing table; give an explicit destination address")
+        test = {"src": w[1], "dst": w[2], "ip": ip, "succeed": succeed, "protocol": protocol,
+                "src_ip": first.get(w[1], ""), "points": points.get(st, 1)}
+        if protocol == "tcp":
+            test["port"] = port
+            test["desc"] = f"{w[1]} {'can' if succeed else 'cannot'} open TCP/{port} on {w[2]} ({ip})"
+        else:
+            test["desc"] = f"{w[1]} {'can' if succeed else 'cannot'} ping {w[2]} ({ip})"
+        tests.append(test)
     return tests
 
 
@@ -445,6 +462,7 @@ def compile_grade(spec):
     """grade statements -> (pka items, lab-check checks)."""
     items, checks = [], []
     overrides = spec.get("grade", {}).get("hints", {})
+    points = spec.get("grade", {}).get("points", {})
     for st in spec.get("grade", {}).get("items", []):
         w = st.split()
         k = w[0]
@@ -453,6 +471,8 @@ def compile_grade(spec):
             _statement(st, w, k, items, checks, spec)
         finally:
             for it in items[first:]:
+                if st in points:
+                    it["points"] = points[st]
                 if st in overrides:
                     it["hint"] = overrides[st]
                 else:
@@ -557,7 +577,7 @@ def _statement(st, w, k, items, checks, spec):
                    f"network {net.network_address} {net.hostmask} area {w[4]}")
     elif k == "stp":                    # stp SW VLAN PRIORITY
         _line_item(items, checks, w[1], None, f"spanning-tree vlan {vlan_list(w[2])} priority {int(w[3])}")
-    elif k == "ping":                   # graded inside Packet Tracer (Connectivity Tests tab)
+    elif k in CONNECTIVITY_STATEMENTS:   # graded inside Packet Tracer (Connectivity Tests tab)
         return
     elif k == "cable":                  # cable DEV PORT DEV PORT (also implied by every student = true link)
         _cable_item(items, checks, spec, w[1], w[2], w[3], w[4])
@@ -598,6 +618,11 @@ def md(text):
     e = re.sub(r"`([^`]+)`", r"<code>\1</code>", e)
     e = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", e)
     return "".join(f"<p>{p.replace(chr(10), ' ')}</p>" for p in e.split("\n\n") if p.strip())
+
+
+def feedback_html(text):
+    """Wrap compact Markdown-like feedback in the same readable style as instruction pages."""
+    return f'<html><head><style>{CSS}</style></head><body>{md(text)}</body></html>'
 
 
 def pages(spec):
@@ -678,8 +703,20 @@ def build(path, open_after=False, output_dir=None, force=False):
     tests = connectivity_tests(spec)
     if tests:
         ptlab.add_connectivity_tests(answer.tree, tests)
+    settings = dict(spec.get("activity", {}))
+    if settings.get("timer", "elapsed") == "countdown":
+        settings.setdefault("countdown_minutes", spec["lab"].get("time", 30))
+    complete_feedback = settings.pop("complete_feedback", None)
+    incomplete_feedback = settings.pop("incomplete_feedback", None)
+    if complete_feedback is None and spec.get("debrief"):
+        complete_feedback = "All assessed items are correct.\n\n" + spec["debrief"]
+    if complete_feedback:
+        settings["complete_feedback_html"] = feedback_html(complete_feedback)
+    if incomplete_feedback:
+        settings["incomplete_feedback_html"] = feedback_html(incomplete_feedback)
     a = {"id": 0, "title": spec["lab"]["title"], "pka_item": items, "brief": spec["lab"]["scenario"],
-         "topics": spec["lab"].get("objectives", []), "level": spec["lab"].get("level", 2), "time": spec["lab"].get("time", 30)}
+         "topics": spec["lab"].get("objectives", []), "level": spec["lab"].get("level", 2),
+         "time": spec["lab"].get("time", 30), "activity": settings}
     pka = ptlab.build_pka(a, start.tree, answer.tree)
     ins = pka.getroot().find("ACTIVITY/INSTRUCTIONS")
     for p in list(ins):

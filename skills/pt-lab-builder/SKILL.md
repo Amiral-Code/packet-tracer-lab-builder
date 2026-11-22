@@ -20,8 +20,15 @@ For the TOML structure, grading statements, device/link rules, and known seriali
 
 Grade with the most specific statement (`access`, `trunk`, `vlan`, `route`, `ospf`, `stp`, `ip`, `up`, `gw`) and use
 `line` only for unindented running-config lines; anything inside a section needs `in DEV "PARENT" "LINE"`.
-Add `ping` connectivity tests for the outcomes the lab is about (inter-VLAN, inter-site, NAT, and `fail` tests for
-ACL policy), on top of the config items.
+Add connectivity tests for the outcomes the lab is about, on top of the config items: `ping` for reachability and
+`http`/`https`/`ssh`/`telnet` or `tcp ... PORT` for service policy. Use `fail` for traffic that must be blocked.
+Do not invent UDP/DNS saved-PDU encodings; they are not supported yet.
+When the request calls for weighted or partial credit, map exact statements under `[grade.points]`; keep ordinary
+items at one point and give larger weights only to outcomes that genuinely deserve more influence.
+
+For timed or assessment-oriented requests, use `[activity]` for elapsed/countdown timing, answer convergence,
+Activity Wizard password, profile locking, and lab-specific completion feedback. Read the activity-control and
+connectivity sections of [references/spec-schema.md](references/spec-schema.md) before using them.
 
 Check, then build:
 

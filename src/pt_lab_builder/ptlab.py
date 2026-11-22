@@ -2,6 +2,7 @@
 """Packet Tracer file codec, activity assessment, and saved-file grading helpers."""
 import copy
 import datetime
+import hashlib
 import os
 import re
 import subprocess
@@ -306,6 +307,48 @@ def instructions_html(a):
             f'<b>ptlab check SPEC SAVED.pka</b> in a terminal.</p></body></html>')
 
 
+def activity_attributes(settings):
+    """Serialize the activity controls whose XML values are confirmed in real files."""
+    timer = settings.get("timer", "elapsed")
+    countdown_ms = int(settings.get("countdown_minutes", 0)) * 60_000 if timer == "countdown" else 0
+    password = settings.get("wizard_password", "")
+    password_hash = hashlib.md5(password.encode("utf-8")).hexdigest().upper() if password else ""
+    return {
+        "COUNTDOWNLEFT": str(countdown_ms),
+        "ELAPSED": "0",
+        "TIMERTYPE": "2" if timer == "countdown" else "0",
+        "COUNTDOWNMS": str(countdown_ms),
+        "FORWARD_ANS_SIM_MS": str(int(settings.get("answer_convergence_ms", 0))),
+        "PASS": password_hash,
+        "COUNTDOWN_EXPIRED": "0",
+        "ENABLED": "no",
+    }
+
+
+LOCKING_PRESETS = {
+    "none": (),
+    "cli-only": ("Use Config Tab", "Router/Switch Config Tab", "Device Use Config Tab"),
+    "realtime-only": ("Switching to Simulation",),
+    "exam": ("Use Config Tab", "Router/Switch Config Tab", "Device Use Config Tab",
+             "Switching to Simulation", "View Command Log", "Copy and Paste"),
+}
+
+
+def apply_locking_preset(locking_tree, preset):
+    """Enable every matching global or per-device switch in a copied Packet Tracer locking tree."""
+    wanted = set(LOCKING_PRESETS[preset])
+    found = set()
+    for node in locking_tree.iter("NODE"):
+        ident = node.findtext("ID")
+        if ident in wanted:
+            node.set("on", "yes")
+            found.add(ident)
+    missing = wanted - found
+    if missing:
+        die(f"activity base has no locking switch(es): {', '.join(sorted(missing))}")
+    return found
+
+
 def build_pka(a, start_tree, answer_tree):
     pka_base = activity_base_path()
     if not pka_base.exists():
@@ -325,24 +368,29 @@ def build_pka(a, start_tree, answer_tree):
     init = ET.SubElement(act, "INITIALSETUP")
     init.append(_node("Network", "Network", head=True))
     ET.SubElement(init, "LOAD_INIT_TREE").text = "false"
-    act.append(copy.deepcopy(base.find("LOCKINGTREE")))
+    settings = a.get("activity", {})
+    locking_tree = copy.deepcopy(base.find("LOCKINGTREE"))
+    apply_locking_preset(locking_tree, settings.get("locking_preset", "none"))
+    act.append(locking_tree)
     act.append(copy.deepcopy(start_tree.getroot().find("OPTIONS")) if start_tree.getroot().find("OPTIONS") is not None
                else copy.deepcopy(base.find("OPTIONS")))
-    activity = ET.SubElement(act, "ACTIVITY", {"COUNTDOWNLEFT": "0", "ELAPSED": "0", "TIMERTYPE": "0",
-                                               "COUNTDOWNMS": "0", "FORWARD_ANS_SIM_MS": "0", "PASS": "",
-                                               "COUNTDOWN_EXPIRED": "0", "ENABLED": "no"})
+    activity = ET.SubElement(act, "ACTIVITY", activity_attributes(settings))
     ins = ET.SubElement(activity, "INSTRUCTIONS", {"layout": "0", "enable_tab": "false"})
     ET.SubElement(ins, "PAGE", {"tabify": "0", "translate": "true", "title": ""}).text = instructions_html(a)
     vm = ET.SubElement(act, "VARIABLE_MANAGER")
     for t in ("SEED_POOLS", "NUMBER_POOLS", "STRING_POOLS", "IP_POOLS", "VARIABLES_POOLS"):
         ET.SubElement(vm, t)
-    ET.SubElement(act, "OVERALL_INCOMPLETE_FEEDBACK", {"translate": "true"}).text = \
-        "<html><body>Not complete yet. Fix the items marked incorrect and check again.</body></html>"
-    ET.SubElement(act, "OVERALL_COMPLETE_FEEDBACK", {"translate": "true"}).text = \
-        "<html><body>All assessed items are correct. Save (Ctrl+S) and run ptlab check for the full check.</body></html>"
+    ET.SubElement(act, "OVERALL_INCOMPLETE_FEEDBACK", {"translate": "true"}).text = settings.get(
+        "incomplete_feedback_html",
+        "<html><body>Not complete yet. Fix the items marked incorrect and check again.</body></html>",
+    )
+    ET.SubElement(act, "OVERALL_COMPLETE_FEEDBACK", {"translate": "true"}).text = settings.get(
+        "complete_feedback_html",
+        "<html><body>All assessed items are correct. Save (Ctrl+S) and run ptlab check for the full check.</body></html>",
+    )
     ET.SubElement(act, "UNLOCK_ASSESSMENT_ITEM_PERCENT").text = "100"
     ET.SubElement(act, "DYNAMIC_PERCENTAGE_FEEDBACK", {"TYPE": "1"}).text = "true"
-    ET.SubElement(act, "USER_PROFILE_LOCKED").text = "false"
+    ET.SubElement(act, "USER_PROFILE_LOCKED").text = "true" if settings.get("profile_locked", False) else "false"
     ET.SubElement(act, "USER_PROFILE_NOGUEST").text = "false"
     ET.SubElement(act, "COMPONENT_LIST").text = "Other, Physical, Ip, Routing, Switching"
     ET.SubElement(act, "CLEAN_ACTIVITY").text = "false"
@@ -373,27 +421,41 @@ def add_connectivity_tests(answer_tree, tests):
         ET.SubElement(scen, "NAME", {"translate": "true"}).text = "Scenario 0"
         ET.SubElement(scen, "DESCRIPTION", {"translate": "true"})
     for t in tests:
+        protocol = t.get("protocol", "icmp")
         pdu = ET.SubElement(scen, "PDU")
-        ET.SubElement(pdu, "TYPE", {"patterned": "no"}).text = "0"
+        if protocol == "tcp":
+            ET.SubElement(pdu, "TYPE", {"name": "", "start": "3000", "patterned": "yes"}).text = "1"
+        else:
+            ET.SubElement(pdu, "TYPE", {"patterned": "no"}).text = "0"
+        ET.SubElement(pdu, "CUSTOM_TYPE")
         ET.SubElement(pdu, "SOURCE").text = devs[t["src"]].findtext("ENGINE/SAVE_REF_ID")
         ET.SubElement(pdu, "PORT")
-        ET.SubElement(pdu, "DESTINATION", {"device": devs[t["dst"]].findtext("ENGINE/SAVE_REF_ID")})
+        if protocol == "tcp":
+            ET.SubElement(pdu, "DESTINATION").text = t["ip"]
+        else:
+            ET.SubElement(pdu, "DESTINATION", {"device": devs[t["dst"]].findtext("ENGINE/SAVE_REF_ID")})
         ET.SubElement(pdu, "COLOR").text = "-8664361" if t["succeed"] else "-3394765"
         ip = ET.SubElement(pdu, "PDU")
         ET.SubElement(ip, "TYPE").text = "CIpHeader"
-        ET.SubElement(ip, "SRCADDR")
+        ET.SubElement(ip, "SRCADDR").text = t.get("src_ip", "") if protocol == "tcp" else ""
         ET.SubElement(ip, "DSTADDR").text = t["ip"]
         ET.SubElement(ip, "PROTOCOL")
-        ET.SubElement(ip, "TTL").text = "255"
-        icmp = ET.SubElement(ip, "PDU")
-        for tag, val in (("TYPE", "CIcmpMessage"), ("ICMPTYPE", "8"), ("CODE", "0"), ("ID", "0"), ("SEQ", "0"),
-                         ("CHK", "0")):
-            ET.SubElement(icmp, tag).text = val
+        ET.SubElement(ip, "TTL").text = "32" if protocol == "tcp" else "255"
+        body = ET.SubElement(ip, "PDU")
+        if protocol == "tcp":
+            for tag, val in (("TYPE", "CTcpHeader"), ("SRC", "5000"), ("DST", str(t["port"])),
+                             ("CHK", "0"), ("LENGTH", "136")):
+                ET.SubElement(body, tag).text = val
+        else:
+            for tag, val in (("TYPE", "CIcmpMessage"), ("ICMPTYPE", "8"), ("CODE", "0"), ("ID", "0"),
+                             ("SEQ", "0"), ("CHK", "0")):
+                ET.SubElement(body, tag).text = val
         ET.SubElement(ip, "TOS").text = "0"
         ET.SubElement(pdu, "TEST_CONDITION").text = "3" if t["succeed"] else "2"
         ET.SubElement(pdu, "POINTS").text = str(t.get("points", 1))
-        ET.SubElement(pdu, "PDU_SIZE").text = "0"
-        ET.SubElement(pdu, "START").text = "0"
+        ET.SubElement(pdu, "PDU_SIZE").text = "10" if protocol == "tcp" else "0"
+        if protocol != "tcp":
+            ET.SubElement(pdu, "START").text = "0"
 
 
 # ---------------------------------------------------------------- launcher

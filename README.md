@@ -6,7 +6,11 @@ This project is independent of Cisco. Cisco Packet Tracer and Cisco device data 
 
 ## Current status
 
-The project is an alpha. Logical topology generation, configuration/troubleshooting activities, instruction pages, grading (addresses, interface state, VLANs, access and trunk ports, static and OSPF routes, STP priority, any running-config line, and Packet Tracer connectivity tests), and Physical placement work. Multi-site Physical layouts and student cabling labs work; grading of rack position is not implemented.
+The project is an alpha. Logical topology generation, configuration/troubleshooting activities, instruction pages,
+grading (addresses, interface state, VLANs, access and trunk ports, static and OSPF routes, STP priority, any
+running-config line, ICMP reachability, and TCP service outcomes), weighted partial credit, and Physical placement work. Activities can use
+elapsed/countdown timing, answer-convergence delay, custom overall feedback, profile locking, and an Activity Wizard
+password. Multi-site Physical layouts and student cabling labs work; grading of rack position is not implemented.
 
 ## Requirements
 
@@ -108,7 +112,7 @@ For everything Packet Tracer activities can do, and what the builder uses so far
 Run the standard-library test suite:
 
 ```bash
-python -m unittest discover -s tests -v
+PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
 The repository deliberately contains no extracted Cisco or course assets. Integration tests use paths supplied through environment variables.

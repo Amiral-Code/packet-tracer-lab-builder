@@ -2,7 +2,9 @@
 
 A map of Packet Tracer 9.0.1's activity (`.pka`) and platform capabilities, and of what pt-lab-builder uses so
 far. Sources: Packet Tracer's bundled help (Activity Wizard, assessment-item reference, CLI references, Physical
-workspace), its sample files (299 decoded), the binary (traced with Rizin), and activities built and checked live.
+workspace), locally available activity files (including a 90-file control-field survey), static binary evidence
+collected with Rizin, and activities built and checked live. See [Research evidence](research-evidence.md) for the
+observed/inferred/unknown boundary.
 
 Status: **used** = the builder generates it and it was confirmed in Packet Tracer; **built** = generated, opens,
 not yet confirmed live; **open** = available in Packet Tracer, not used yet.
@@ -14,17 +16,17 @@ not yet confirmed live; **open** = available in Packet Tracer, not used yet.
 | Three networks | student, initial (Reset Activity), answer | `PACKETTRACER5` ×3, in that order | used |
 | Instruction pages | multi-page HTML with Back/Next | `ACTIVITY/INSTRUCTIONS/PAGE` | used |
 | Assessment tree | compares chosen settings of the student's network with the answer network (149 node classes, see below) | `COMPARISONS` (checkType 2 on graded leaves, 1 on their branches) | used: IP/mask, Port Up, gateway, hostname, VLAN name, access/native VLAN, config lines (`LINES` nodes) |
-| Points and components per item | weight items; group the score by Ip/Routing/Switching/Physical/Other | `POINTS`, `COMPONENTS` | used (1 point each) |
-| Per-item feedback | a hint shown next to each **incorrect** item in Check Results | `NAME incorrectFeedback` | open, and easy |
+| Points and components per item | weight items; group the score by Ip/Routing/Switching/Physical/Other | `POINTS`, `COMPONENTS` | used: configurable positive integer weights per statement |
+| Per-item feedback | a hint shown next to each **incorrect** item in Check Results | `NAME incorrectFeedback` | used: automatic and per-item overrides |
 | Connectivity tests | Realtime PDUs sent at Check Results, expected to succeed or fail | PDUs in the answer network's first scenario, `TEST_CONDITION` 3/2 | used (ping) |
-| Complex-PDU tests | the same with any user-created PDU: TCP/UDP to a port (HTTP 80, Telnet 23, DNS 53…) | same scenario, complex PDU | open: ideal for ACL labs ("web allowed, Telnet blocked") |
-| Overall feedback | message when complete / incomplete (HTML) | `OVERALL_COMPLETE_FEEDBACK`, `OVERALL_INCOMPLETE_FEEDBACK` | used, generic text |
+| Complex-PDU tests | the same with a TCP PDU to a port (HTTP 80, HTTPS 443, SSH 22, Telnet 23, or explicit port) | same scenario, complex PDU | built from observed TCP encodings; live outcome confirmation pending; UDP/DNS unknown |
+| Overall feedback | message when complete / incomplete (HTML) | `OVERALL_COMPLETE_FEEDBACK`, `OVERALL_INCOMPLETE_FEEDBACK` | used (generic); custom per-lab text built |
 | Dynamic feedback | live "Completion: x %" while working | `DYNAMIC_PERCENTAGE_FEEDBACK` | used |
-| Timer | elapsed time or a countdown limit | `ACTIVITY TIMERTYPE`, `COUNTDOWNMS` | open: exam mode |
-| Answer convergence | fast-forward the answer network before comparing (OSPF/STP need time) | `ACTIVITY FORWARD_ANS_SIM_MS` | open |
-| User profile locking | changing the student name resets the activity | `USER_PROFILE_LOCKED` | open |
-| Password | locks the Activity Wizard (MD5 of the password, `Util::md5Digest`) | `ACTIVITY PASS` | open, and easy |
-| Locking tree | 404 switches, `on="yes"`: block Physical/Simulation, CLI/Config/Desktop tabs, delete/move/create devices, cabling, Check Results, Reset; per-device locks; **start in a Physical location**; open a device's dialog on start | `LOCKINGTREE` | open, high value |
+| Timer | elapsed time or a countdown limit | `ACTIVITY TIMERTYPE`, `COUNTDOWNMS`, `COUNTDOWNLEFT` | built; countdown encoding observed in real activities, live expiry pending |
+| Answer convergence | fast-forward the answer network before comparing (OSPF/STP need time) | `ACTIVITY FORWARD_ANS_SIM_MS` | built; field observed, non-zero behaviour needs live confirmation |
+| User profile locking | changing the student name resets the activity | `USER_PROFILE_LOCKED` | built; live reset behaviour pending |
+| Password | locks the Activity Wizard (uppercase MD5 of the password, corroborated by `Util::md5Digest`) | `ACTIVITY PASS` | built; MD5 is an edit deterrent, not secure storage |
+| Locking tree | named switches, `on="yes"`: block Physical/Simulation, CLI/Config/Desktop tabs, delete/move/create devices, cabling, Check Results, Reset; per-device locks; **start in a Physical location**; open a device's dialog on start | `LOCKINGTREE` | built presets: `cli-only`, `realtime-only`, `exam`; Physical start location still open |
 | Initial network setup | alternative starting values for chosen items | `INITIALSETUP` | open |
 | Object location sets | several logical layouts, picked at random or by variable | `OBJECT_LOCATIONS` | open |
 | Variable Manager | seed/number/string/IP pools: per-student random names and addressing; "Entire Range" accepts any pool value as correct | `VARIABLE_MANAGER` | open: anti-copying, like `lab pt mystery` |
@@ -56,8 +58,10 @@ Not every leaf's value format is documented; the builder only grades formats con
 
 ### Devices
 
-Packet Tracer's own sample files use 140 device models; the builder's library has 24. CCNA/CCNP-relevant models
-available but not yet in the library: ASA 5505, ISA 3000, ISR4321, IR1101, IR8340, C8200 (PT8200), 819HGW, 829,
+Packet Tracer's own sample files use 140 device models; the builder recognizes 26. The latest local survey found
+ISR4321 and 1841 templates, so both are now supported when present in a user's initialization sources.
+CCNA/CCNP-relevant models available but not yet in the library include ASA 5505/5506-X, ISA 3000, IR1101,
+IR8340, C8200 (PT8200), 819HGW, 829,
 CGR1240, 2950/2950T switches, Switch-PT, IE-2000/3400/9300 industrial switches, WLC-PT, Meraki MX65W and server,
 DSL and cable modems, home router (AC), analog and home-VoIP phones, cell tower and central-office server, sniffer,
 plus about 80 IoT things, PLC/HMI and OT gear. Adding a model is one entry in `library.WANT`, plus deciding whether
@@ -92,13 +96,13 @@ scenarios. An activity can start in Simulation mode (locking tree) for "watch an
 
 ## Suggested next steps for the builder
 
-1. **Quick wins:** activity password; per-item hints on incorrect items (from each part's `hint`); lab-specific
-   complete/incomplete feedback (from `debrief`); timer/countdown; answer convergence time for routing labs.
-2. **Locking presets:** `exam` (no Simulation mode, no assessment view until the end), `cabling` (start inside
-   the wiring closet), `cli-only` (no Config tab).
-3. **Complex-PDU connectivity tests:** `http SRC DST`, `telnet SRC DST fail` for ACL and firewall labs.
-4. **Flexible answers:** `RegExMatch` items such as "any host address in 192.168.10.0/24".
-5. **More models and modules:** ASA 5505, ISR4321, 2950, sniffer, home router, cell tower; serial and switch
+1. **Live-confirm the newly built controls:** countdown expiry, non-zero answer convergence, profile lock, password,
+   custom overall feedback, and TCP allow/deny outcomes in Packet Tracer 9.0.1.
+2. **Extend locking controls:** live-confirm current presets, then add a `cabling` preset that starts inside the
+   intended wiring closet without depending on unstable source-template UUIDs.
+3. **Flexible answers:** `RegExMatch` items such as "any host address in 192.168.10.0/24".
+4. **More models and modules:** ASA 5505/5506-X, 2950, sniffer, home router, cell tower; serial and switch
    modules for WAN labs.
-6. **Per-student variants:** Variable Manager pools for addressing and names.
-7. **Partial credit:** the scoring model, for capstones.
+5. **Per-student variants:** Variable Manager pools for addressing and names.
+6. **Conditional partial credit:** research the scoring model for rules such as “two of three routers addressed.”
+   Ordinary per-item partial credit already works through statement point weights.

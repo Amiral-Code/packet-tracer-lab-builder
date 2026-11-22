@@ -80,6 +80,30 @@ def lint(spec) -> Issues:
     for field in ("title", "scenario"):
         if not lab.get(field):
             issues.error(f"[lab] has no {field}")
+    activity = spec.get("activity", {})
+    if not isinstance(activity, dict):
+        issues.error("[activity] must be a table")
+        activity = {}
+    timer = activity.get("timer", "elapsed")
+    if timer not in ("elapsed", "countdown"):
+        issues.error(f"[activity] timer must be elapsed or countdown, not {timer!r}")
+    if timer == "countdown" or "countdown_minutes" in activity:
+        minutes = activity.get("countdown_minutes", lab.get("time", 30))
+        if isinstance(minutes, bool) or not isinstance(minutes, int) or minutes <= 0:
+            issues.error("[activity] countdown_minutes must be a positive integer")
+    convergence = activity.get("answer_convergence_ms", 0)
+    if isinstance(convergence, bool) or not isinstance(convergence, int) or convergence < 0:
+        issues.error("[activity] answer_convergence_ms must be a non-negative integer")
+    if "wizard_password" in activity and not isinstance(activity["wizard_password"], str):
+        issues.error("[activity] wizard_password must be a string")
+    if "profile_locked" in activity and not isinstance(activity["profile_locked"], bool):
+        issues.error("[activity] profile_locked must be true or false")
+    preset = activity.get("locking_preset", "none")
+    if not isinstance(preset, str) or preset not in ptlab.LOCKING_PRESETS:
+        issues.error(f"[activity] locking_preset must be one of {', '.join(ptlab.LOCKING_PRESETS)}, not {preset!r}")
+    for field in ("complete_feedback", "incomplete_feedback"):
+        if field in activity and not isinstance(activity[field], str):
+            issues.error(f"[activity] {field} must be a string")
     try:
         index = _index()
     except OSError:
@@ -231,6 +255,15 @@ def lint(spec) -> Issues:
     statements = spec.get("grade", {}).get("items", [])
     if not statements:
         issues.error("[grade] has no items: Check Results would score nothing")
+    points = spec.get("grade", {}).get("points", {})
+    if not isinstance(points, dict):
+        issues.error("[grade.points] must be a table mapping exact grade statements to positive integers")
+        points = {}
+    for statement, value in points.items():
+        if statement not in statements:
+            issues.error(f"[grade.points] refers to a statement not present in items: {statement!r}")
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            issues.error(f"[grade.points] {statement!r} must be a positive integer")
     table = {(r[0], labgen.long_if(r[1])): r[2] for r in labgen.addressing_rows(spec) if len(r) >= 3}
     first_addr = {r[0] for r in labgen.addressing_rows(spec) if len(r) >= 3 and r[2] and r[2].lower() != "dhcp"}
     for st in statements:
@@ -311,14 +344,28 @@ def _statement_problem(w, st, model, ports, first_addr):
             for dev, port in ((w[1], w[2]), (w[3], w[4])):
                 if labgen.long_if(port) not in ports[dev]:
                     return f"{dev} has no port {labgen.long_if(port)}"
-        if k == "ping":
-            rest = [x for x in w[3:] if x != "fail"]
-            if len(w) < 3 or w[2] not in model:
-                return "write it as: ping SRC DST [A.B.C.D] [fail], with DST a device name"
-            if rest:
-                ipaddress.ip_address(rest[0])
+        if k in labgen.CONNECTIVITY_STATEMENTS:
+            base = 4 if k == "tcp" else 3
+            syntax = ("tcp SRC DST PORT [A.B.C.D] [fail]" if k == "tcp"
+                      else f"{k} SRC DST [A.B.C.D] [fail]")
+            if len(w) < base:
+                return f"write it as: {syntax}, with DST a device name"
+            if w[2] not in model:
+                return f"unknown device {w[2]}"
+            if k == "tcp" and not 1 <= int(w[3]) <= 65535:
+                return "TCP port must be 1-65535"
+            rest = w[base:]
+            if rest.count("fail") > 1:
+                return "use 'fail' at most once"
+            addresses = [x for x in rest if x != "fail"]
+            if len(addresses) > 1:
+                return f"write it as: {syntax}"
+            if addresses:
+                ipaddress.ip_address(addresses[0])
             elif w[2] not in first_addr:
-                return f"{w[2]} has no address in the addressing table: add the address to ping"
+                return f"{w[2]} has no address in the addressing table: add the destination address"
+            if k != "ping" and w[1] not in first_addr:
+                return f"{w[1]} has no address in the addressing table: TCP tests need a source address"
     except ValueError as e:
         return str(e)
     return None

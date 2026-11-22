@@ -27,6 +27,15 @@ objectives = [
   "Diagnose six hidden faults using a structured evidence-first workflow",
 ]
 
+[activity]
+timer = "countdown"
+countdown_minutes = 90
+answer_convergence_ms = 30000
+profile_locked = false
+locking_preset = "cli-only"
+incomplete_feedback = "The cutover is not stable yet. Review each failed item and capture the related `show` evidence before changing configuration."
+complete_feedback = "All assessed Northstar outcomes pass. **Save the activity** and keep your before/after evidence with the change record."
+
 [[site]]
 name = "HQ"
 city = "Casablanca"
@@ -781,3 +790,9 @@ questions = [
   "At what stage does the USERS-IN ACL act relative to the HQ-EDGE PAT rule?",
   "Which three commands provide the strongest handover evidence for STP, OSPF, and NAT?",
 ]
+
+[grade.points]
+"line HQ-EDGE ip nat inside source list NAT_INSIDE interface GigabitEthernet0/0/2 overload" = 3
+"ospf BR-R1 10 10.255.255.0/30 0" = 3
+"trunk HQ-SW1 Po1 allowed 10,20,30,99" = 2
+"ping HQ-USER1 PUBLIC-SRV" = 2
