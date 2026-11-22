@@ -26,8 +26,8 @@ Typical native dependencies:
 Clone the repository and install it into an isolated Python environment:
 
 ```bash
-git clone https://github.com/OWNER/pt-lab-builder.git
-cd pt-lab-builder
+git clone https://github.com/Amiral-Code/packet-tracer-lab-builder.git
+cd packet-tracer-lab-builder
 python -m pip install .
 ```
 
@@ -64,8 +64,8 @@ Use source files from the same Packet Tracer generation your learners use. A `.p
 The repository includes the same portable skill for Claude Code and Codex.
 
 ```bash
-gh skill install OWNER/pt-lab-builder pt-lab-builder --agent claude-code --scope user
-gh skill install OWNER/pt-lab-builder pt-lab-builder --agent codex --scope user
+gh skill install Amiral-Code/packet-tracer-lab-builder pt-lab-builder --agent claude-code --scope user
+gh skill install Amiral-Code/packet-tracer-lab-builder pt-lab-builder --agent codex --scope user
 ```
 
 Manual installation:
@@ -113,6 +113,6 @@ python -m unittest discover -s tests -v
 
 The repository deliberately contains no extracted Cisco or course assets. Integration tests use paths supplied through environment variables.
 
-## Before publishing
+## License and content boundary
 
-Choose and add an open-source license for your original code. Do not commit extracted Packet Tracer device XML, third-party course files, generated activities containing third-party content, or other material unless you have confirmed redistribution rights.
+The original code and skill are licensed under Apache-2.0. Cisco Packet Tracer, Cisco device data, third-party course files, and generated activities containing third-party content are not covered by this repository's license. Do not commit or redistribute those materials unless you have confirmed that you have the necessary rights.

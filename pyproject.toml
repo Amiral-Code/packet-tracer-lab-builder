@@ -9,6 +9,7 @@ description = "Build original native Cisco Packet Tracer activities from TOML sp
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{name = "Amiral"}]
+license = "Apache-2.0"
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
@@ -21,6 +22,11 @@ classifiers = [
   "Topic :: System :: Networking",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Amiral-Code/packet-tracer-lab-builder"
+Repository = "https://github.com/Amiral-Code/packet-tracer-lab-builder.git"
+Issues = "https://github.com/Amiral-Code/packet-tracer-lab-builder/issues"
+
 [project.scripts]
 ptlab = "pt_lab_builder.cli:main"
 
@@ -28,4 +34,4 @@ ptlab = "pt_lab_builder.cli:main"
 packages = ["src/pt_lab_builder"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src", "skills", "examples", "tests", "README.md", "CMakeLists.txt", "pyproject.toml"]
+include = ["src", "skills", "examples", "tests", "README.md", "LICENSE", "NOTICE", "CMakeLists.txt", "pyproject.toml"]
