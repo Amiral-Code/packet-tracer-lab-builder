@@ -110,6 +110,14 @@ simulate pings, and `ptlab check` reports only the config items. DST's address d
 the addressing table. Use pings to grade outcomes (inter-VLAN routing, NAT, ACL policy) on top of the config
 items, not instead of them, so `ptlab lint` can still prove each fault is caught.
 
+Every Check Results item receives a short diagnostic hint by default. Override one without revealing its answer
+by mapping the exact grade statement under `[grade.hints]`:
+
+```toml
+[grade.hints]
+"trunk SW1 G0/1 allowed 10,20,99" = "Compare the allowed VLAN list on both ends of the uplink."
+```
+
 Serialization invariants established by local testing:
 
 - `.pka` networks are main/student, initial/reset, then answer.

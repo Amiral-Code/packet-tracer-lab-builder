@@ -173,6 +173,9 @@ def load_spec(path):
         s = tomllib.load(fh)
     s["_path"] = path
     s["_id"] = s["lab"].get("id") or os.path.splitext(os.path.basename(path))[0]
+    for key in ("debrief", "questions"):  # usually written under [grade], where TOML files them
+        if key not in s and key in s.get("grade", {}):
+            s[key] = s["grade"][key]
     return s
 
 
@@ -441,76 +444,19 @@ def connectivity_tests(spec):
 def compile_grade(spec):
     """grade statements -> (pka items, lab-check checks)."""
     items, checks = [], []
+    overrides = spec.get("grade", {}).get("hints", {})
     for st in spec.get("grade", {}).get("items", []):
         w = st.split()
         k = w[0]
-        if k == "ip":                       # ip DEV IFACE A.B.C.D/NN
-            dev, iface, cidr = w[1], long_if(w[2]), w[3]
-            n = ipaddress.ip_interface(cidr)
-            items += [{"device": dev, "kind": "ip", "port": iface, "value": str(n.ip)},
-                      {"device": dev, "kind": "mask", "port": iface, "value": str(n.netmask)}]
-            if any(d["name"] == dev and ptbuild_model_is_host(d["model"]) for d in spec["device"]):
-                checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} {cidr}", "ip": str(n.ip), "mask": str(n.netmask)})
-            else:
-                checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} {cidr}", "block": "interface " + re.escape(iface),
-                               "has": [f"ip address {re.escape(str(n.ip))} {re.escape(str(n.netmask))}"]})
-        elif k == "up":                     # up DEV IFACE
-            dev, iface = w[1], long_if(w[2])
-            items.append({"device": dev, "kind": "port_on", "port": iface})
-            checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} is up", "block": "interface " + re.escape(iface),
-                           "lacks": ["shutdown"], "absent_ok": True})
-        elif k == "gw":                     # gw HOST A.B.C.D
-            items.append({"device": w[1], "kind": "gw", "value": w[2]})
-            checks.append({"device": w[1], "desc": f"{w[1]} gateway {w[2]}", "gw": w[2]})
-        elif k == "hostname":               # hostname DEV NAME
-            items.append({"device": w[1], "kind": "hostname", "value": w[2]})
-            checks.append({"device": w[1], "desc": f"{w[1]} hostname {w[2]}", "has": [f"hostname {re.escape(w[2])}"]})
-        elif k == "line":                   # line DEV <exact top-level running-config line>
-            dev, line = w[1], " ".join(st.split(None, 2)[2].strip().strip("'\"").split())
-            _line_item(items, checks, dev, None, line)
-        elif k == "in":                     # in DEV "PARENT LINE" "SUB-COMMAND"
-            dev, parent, line = _args(st, 4)[1:]
-            _line_item(items, checks, dev, parent, line)
-        elif k == "dhcp":                   # dhcp HOST
-            checks.append({"device": w[1], "desc": f"{w[1]} uses DHCP", "dhcp": True})
-        elif k == "vlan":                   # vlan SW ID NAME
-            dev, num, name = w[1], int(w[2]), w[3]
-            items.append({"device": dev, "kind": "vlan_name", "vlan": str(num), "value": name})
-            checks.append({"device": dev, "desc": f"{dev} VLAN {num} named {name}", "vlan": (num, name)})
-        elif k == "access":                 # access SW IFACE VLAN
-            dev, iface, vlan = w[1], long_if(w[2]), int(w[3])
-            items.append({"device": dev, "kind": "access_vlan", "port": iface, "value": str(vlan)})
-            parent = f"interface {iface}"
-            _line_item(items, checks, dev, parent, "switchport mode access")
-            checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} access VLAN {vlan}",
-                           "block": re.escape(parent), "has": [f"switchport access vlan {vlan}"]})
-        elif k == "trunk":                  # trunk SW IFACE [allowed LIST] [native N]
-            dev, iface = w[1], long_if(w[2])
-            opts = dict(zip(w[3::2], w[4::2]))
-            parent = f"interface {iface}"
-            _line_item(items, checks, dev, parent, "switchport mode trunk")
-            if "allowed" in opts:
-                _line_item(items, checks, dev, parent, "switchport trunk allowed vlan " + vlan_list(opts["allowed"]))
-            if "native" in opts:
-                items.append({"device": dev, "kind": "native_vlan", "port": iface, "value": str(int(opts["native"]))})
-                checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} native VLAN {opts['native']}",
-                               "block": re.escape(parent), "has": [f"switchport trunk native vlan {int(opts['native'])}"]})
-        elif k == "route":                  # route DEV PREFIX/LEN NEXT-HOP|EXIT-IFACE
-            net = ipaddress.ip_network(w[2], strict=True)
-            via = w[3] if re.fullmatch(r"[\d.]+", w[3]) else long_if(w[3])
-            _line_item(items, checks, w[1], None, f"ip route {net.network_address} {net.netmask} {via}")
-        elif k == "ospf":                   # ospf DEV PID PREFIX/LEN AREA
-            net = ipaddress.ip_network(w[3], strict=True)
-            _line_item(items, checks, w[1], f"router ospf {int(w[2])}",
-                       f"network {net.network_address} {net.hostmask} area {w[4]}")
-        elif k == "stp":                    # stp SW VLAN PRIORITY
-            _line_item(items, checks, w[1], None, f"spanning-tree vlan {vlan_list(w[2])} priority {int(w[3])}")
-        elif k == "ping":                   # graded inside Packet Tracer (Connectivity Tests tab)
-            continue
-        elif k == "cable":                  # cable DEV PORT DEV PORT (also implied by every student = true link)
-            _cable_item(items, checks, spec, w[1], w[2], w[3], w[4])
-        else:
-            die(f"unknown grade statement: {st}")
+        first = len(items)
+        try:
+            _statement(st, w, k, items, checks, spec)
+        finally:
+            for it in items[first:]:
+                if st in overrides:
+                    it["hint"] = overrides[st]
+                else:
+                    it.setdefault("hint", default_hint(w, it))
     graded = {frozenset({(w[1], long_if(w[2])), (w[3], long_if(w[4]))})
               for w in (st.split() for st in spec.get("grade", {}).get("items", [])) if w[0] == "cable"}
     for lk in spec.get("link", []):          # every cable the student must add is graded
@@ -519,6 +465,104 @@ def compile_grade(spec):
             if frozenset({(na, long_if(pa)), (nb, long_if(pb))}) not in graded:
                 _cable_item(items, checks, spec, na, pa, nb, pb)
     return items, checks
+
+
+def default_hint(w, item):
+    """A nudge shown next to an incorrect item in Check Results: where to look, never the answer."""
+    k, dev = w[0], w[1] if len(w) > 1 else ""
+    port = short_if(item["port"]) if item.get("port") else ""
+    kind = item.get("kind")
+    if kind in ("ip", "mask"):
+        return f"Compare {dev} {port}'s address and mask with the addressing table (show ip interface brief / ipconfig)."
+    if kind == "port_on":
+        if k == "cable":
+            return f"Is {dev} {port} cabled to the right port, with the right cable type? Check its link light."
+        return f"{dev} {port} is not up/up: is it enabled (no shutdown) and is its cable connected?"
+    if kind == "gw":
+        return f"Check {dev}'s default gateway (ipconfig): it must be its router's address on the same subnet."
+    if kind == "hostname":
+        return f"Check this device's name: show running-config | include hostname."
+    if kind == "vlan_name":
+        return f"Check the VLANs on {dev} and their names: show vlan brief."
+    if kind in ("access_vlan", "native_vlan") or k in ("access", "trunk"):
+        return f"Check how {dev} {port or short_if(long_if(w[2]))} is configured: show interfaces switchport / show interfaces trunk."
+    hints = {"route": f"Check the static routes on {dev}: show ip route static.",
+             "ospf": f"Check which networks OSPF advertises on {dev}, and in which area: show ip protocols.",
+             "stp": f"Check the bridge priority on {dev}: show spanning-tree.",
+             "line": f"Compare {dev}'s running configuration with the task: show running-config.",
+             "in": f"Compare {dev}'s running configuration with the task: show running-config."}
+    return hints.get(k, f"Compare {dev}'s configuration with the task.")
+
+
+def _statement(st, w, k, items, checks, spec):
+    """One grade statement -> Packet Tracer items (+ local checks)."""
+    if k == "ip":                       # ip DEV IFACE A.B.C.D/NN
+        dev, iface, cidr = w[1], long_if(w[2]), w[3]
+        n = ipaddress.ip_interface(cidr)
+        items += [{"device": dev, "kind": "ip", "port": iface, "value": str(n.ip)},
+                  {"device": dev, "kind": "mask", "port": iface, "value": str(n.netmask)}]
+        if any(d["name"] == dev and ptbuild_model_is_host(d["model"]) for d in spec["device"]):
+            checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} {cidr}", "ip": str(n.ip), "mask": str(n.netmask)})
+        else:
+            checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} {cidr}", "block": "interface " + re.escape(iface),
+                           "has": [f"ip address {re.escape(str(n.ip))} {re.escape(str(n.netmask))}"]})
+    elif k == "up":                     # up DEV IFACE
+        dev, iface = w[1], long_if(w[2])
+        items.append({"device": dev, "kind": "port_on", "port": iface})
+        checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} is up", "block": "interface " + re.escape(iface),
+                       "lacks": ["shutdown"], "absent_ok": True})
+    elif k == "gw":                     # gw HOST A.B.C.D
+        items.append({"device": w[1], "kind": "gw", "value": w[2]})
+        checks.append({"device": w[1], "desc": f"{w[1]} gateway {w[2]}", "gw": w[2]})
+    elif k == "hostname":               # hostname DEV NAME
+        items.append({"device": w[1], "kind": "hostname", "value": w[2]})
+        checks.append({"device": w[1], "desc": f"{w[1]} hostname {w[2]}", "has": [f"hostname {re.escape(w[2])}"]})
+    elif k == "line":                   # line DEV <exact top-level running-config line>
+        dev, line = w[1], " ".join(st.split(None, 2)[2].strip().strip("'\"").split())
+        _line_item(items, checks, dev, None, line)
+    elif k == "in":                     # in DEV "PARENT LINE" "SUB-COMMAND"
+        dev, parent, line = _args(st, 4)[1:]
+        _line_item(items, checks, dev, parent, line)
+    elif k == "dhcp":                   # dhcp HOST
+        checks.append({"device": w[1], "desc": f"{w[1]} uses DHCP", "dhcp": True})
+    elif k == "vlan":                   # vlan SW ID NAME
+        dev, num, name = w[1], int(w[2]), w[3]
+        items.append({"device": dev, "kind": "vlan_name", "vlan": str(num), "value": name})
+        checks.append({"device": dev, "desc": f"{dev} VLAN {num} named {name}", "vlan": (num, name)})
+    elif k == "access":                 # access SW IFACE VLAN
+        dev, iface, vlan = w[1], long_if(w[2]), int(w[3])
+        items.append({"device": dev, "kind": "access_vlan", "port": iface, "value": str(vlan)})
+        parent = f"interface {iface}"
+        _line_item(items, checks, dev, parent, "switchport mode access")
+        checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} access VLAN {vlan}",
+                       "block": re.escape(parent), "has": [f"switchport access vlan {vlan}"]})
+    elif k == "trunk":                  # trunk SW IFACE [allowed LIST] [native N]
+        dev, iface = w[1], long_if(w[2])
+        opts = dict(zip(w[3::2], w[4::2]))
+        parent = f"interface {iface}"
+        _line_item(items, checks, dev, parent, "switchport mode trunk")
+        if "allowed" in opts:
+            _line_item(items, checks, dev, parent, "switchport trunk allowed vlan " + vlan_list(opts["allowed"]))
+        if "native" in opts:
+            items.append({"device": dev, "kind": "native_vlan", "port": iface, "value": str(int(opts["native"]))})
+            checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} native VLAN {opts['native']}",
+                           "block": re.escape(parent), "has": [f"switchport trunk native vlan {int(opts['native'])}"]})
+    elif k == "route":                  # route DEV PREFIX/LEN NEXT-HOP|EXIT-IFACE
+        net = ipaddress.ip_network(w[2], strict=True)
+        via = w[3] if re.fullmatch(r"[\d.]+", w[3]) else long_if(w[3])
+        _line_item(items, checks, w[1], None, f"ip route {net.network_address} {net.netmask} {via}")
+    elif k == "ospf":                   # ospf DEV PID PREFIX/LEN AREA
+        net = ipaddress.ip_network(w[3], strict=True)
+        _line_item(items, checks, w[1], f"router ospf {int(w[2])}",
+                   f"network {net.network_address} {net.hostmask} area {w[4]}")
+    elif k == "stp":                    # stp SW VLAN PRIORITY
+        _line_item(items, checks, w[1], None, f"spanning-tree vlan {vlan_list(w[2])} priority {int(w[3])}")
+    elif k == "ping":                   # graded inside Packet Tracer (Connectivity Tests tab)
+        return
+    elif k == "cable":                  # cable DEV PORT DEV PORT (also implied by every student = true link)
+        _cable_item(items, checks, spec, w[1], w[2], w[3], w[4])
+    else:
+        die(f"unknown grade statement: {st}")
 
 
 def _cable_item(items, checks, spec, a, pa, b, pb):
@@ -530,7 +574,8 @@ def _cable_item(items, checks, spec, a, pa, b, pb):
     want = link.get("cable") or (cable_for(models[a], models[b], pa, pb) if a in models and b in models else None)
     for dev, port in ((a, pa), (b, pb)):
         if not ptbuild_model_is_host(models.get(dev, "")):
-            items.append({"device": dev, "kind": "port_on", "port": port})
+            items.append({"device": dev, "kind": "port_on", "port": port,
+                          "hint": default_hint(["cable", dev], {"kind": "port_on", "port": port})})
     checks.append({"device": a, "desc": f"cable {a} {short_if(pa)} - {b} {short_if(pb)}"
                    + (f" ({want.removeprefix('e')})" if want else ""), "cable": (a, pa, b, pb), "cable_type": want})
 

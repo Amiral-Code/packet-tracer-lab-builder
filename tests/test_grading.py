@@ -95,7 +95,17 @@ class GradeStatements(unittest.TestCase):
     def test_sub_command_items_use_the_wizard_line_id(self):
         items, _ = grade(['in R1 "router ospf 1" "router-id 1.1.1.1"'], [device("R1", R1)])
         self.assertEqual(items, [{"device": "R1", "kind": "run_line", "line_id": "router ospf 1 router-id 1.1.1.1",
-                                  "value": " router-id 1.1.1.1"}])
+                                  "value": " router-id 1.1.1.1",
+                                  "hint": "Compare R1's running configuration with the task: show running-config."}])
+
+    def test_custom_hint_is_written_as_incorrect_feedback(self):
+        statement = "up R1 G0/0"
+        s = spec(statement)
+        s["grade"]["hints"] = {statement: "Inspect the interface state and its cable."}
+        items, _ = labgen.compile_grade(s)
+        comparisons = ptlab.comparisons(items)
+        leaf = next(n for n in comparisons.iter("NAME") if n.get("headNode") == "false")
+        self.assertEqual(leaf.get("incorrectFeedback"), "Inspect the interface state and its cable.")
 
     def test_ping_defaults_to_the_first_address(self):
         s = spec("ping PC1 R1", "ping PC1 R1 10.9.9.9 fail", rows=[["R1", "G0/0", "10.0.0.1/30", ""]])

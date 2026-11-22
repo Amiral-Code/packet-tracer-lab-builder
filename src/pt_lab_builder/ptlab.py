@@ -194,11 +194,12 @@ def grade(a, tree, checks=None, quiet=False):
 # ---------------------------------------------------------------- native activities (.pka)
 
 
-def _node(name, nid, *, head, eclass="8", comp="", points="", value="", enabled=None, check="0", variable=""):
+def _node(name, nid, *, head, eclass="8", comp="", points="", value="", enabled=None, check="0", variable="",
+          feedback=""):
     n = ET.Element("NODE")
     nm = ET.SubElement(n, "NAME", {"variableName": variable, "checkType": check,
                                    "variableEnabled": ("false" if head else "true") if enabled is None else enabled,
-                                   "nodeValue": value, "obfuscateName": "false", "incorrectFeedback": "",
+                                   "nodeValue": value, "obfuscateName": "false", "incorrectFeedback": feedback,
                                    "eclass": eclass, "headNode": "true" if head else "false",
                                    "overrideDBGrading": "false"})
     nm.text = name
@@ -260,6 +261,7 @@ def comparisons(items):
         elif it["kind"] == "run_line":
             name, nid = it["value"].strip(), it["line_id"]
         cur.append(_node(name, nid, head=False, eclass=eclass, comp=comp, points=str(it.get("points", 1)),
+                         feedback=it.get("hint", ""),
                          value=value, check="2", variable=variable))
     # tri-state checkboxes: every branch above a graded item is "partially checked" (1),
     # otherwise Check Results never descends into it

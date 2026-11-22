@@ -25,8 +25,9 @@ class IntegrationTests(unittest.TestCase):
                  if node.findtext("TYPE") == "6"]
         self.assertEqual(names, ["Power Distribution Device0", "R1", "PC1"])
         self.assertIn("Test Rack", [node.findtext("NAME") for node in topology.root.findall(".//NODE")])
-        self.assertEqual(router.findtext("WORKSPACE/PHYSICAL").split(",")[-2], topology._rack.findtext("UUID_STR"))
-        self.assertEqual(pc.findtext("WORKSPACE/PHYSICAL").split(",")[-2], topology._building.findtext("UUID_STR"))
+        site = topology._sites[None]
+        self.assertEqual(router.findtext("WORKSPACE/PHYSICAL").split(",")[-2], site["rack"].findtext("UUID_STR"))
+        self.assertEqual(pc.findtext("WORKSPACE/PHYSICAL").split(",")[-2], site["building"].findtext("UUID_STR"))
 
     def test_example_builds_and_round_trips(self):
         root = Path(__file__).resolve().parents[1]
