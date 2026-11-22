@@ -1,6 +1,7 @@
 ---
 name: pt-lab-builder
 description: Design, build, and validate original Cisco Packet Tracer activities from TOML specs, including configure, troubleshooting, multi-topic capstone, and basic Physical-mode labs. Use for requests to create Packet Tracer, CCNA, ENCOR, or CCIE-style practice labs. Route unsupported Packet Tracer technologies to a more capable emulator.
+license: Apache-2.0
 ---
 
 # Packet Tracer lab builder
