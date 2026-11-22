@@ -129,9 +129,16 @@ def network_roots(root):
 
 
 def _has_usable_physical_workspace(root):
+    """A base topology needs a PC to copy a physical node from, and the full
+    building (2) / wiring closet (3) / rack (4) hierarchy that devices are placed into.
+    Industrial or home samples often lack the rack, which made every router/switch fail."""
     pc = next((d for d in root.findall("NETWORK/DEVICES/DEVICE")
                if d.findtext("ENGINE/TYPE") == "Pc" and d.findtext("WORKSPACE/PHYSICAL")), None)
-    return pc is not None and root.find("PHYSICALWORKSPACE") is not None
+    workspace = root.find("PHYSICALWORKSPACE")
+    if pc is None or workspace is None:
+        return False
+    kinds = {node.findtext("TYPE") for node in workspace.iter("NODE")}
+    return {"2", "3", "4"} <= kinds
 
 
 def _write_activity_base(activity, destination):

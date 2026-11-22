@@ -196,10 +196,19 @@ class Topology:
         n.find("NAME").text = name
         placement = {"location": physical} if isinstance(physical, str) else dict(physical or {})
         default = "rack" if key.startswith(("router", "switch", "l3switch", "wlc", "server")) else "building"
+        targets = {"rack": self._rack, "closet": self._closet, "building": self._building}
+        available = [k for k, v in targets.items() if v is not None]
         location = placement.get("location", default)
-        target = {"rack": self._rack, "closet": self._closet, "building": self._building}.get(location)
-        if target is None:
-            raise ValueError(f"physical location {location!r} is unavailable; use rack, closet, or building")
+        if location not in targets:
+            raise ValueError(f"physical location {location!r} is unknown; use rack, closet, or building")
+        if targets[location] is None and "location" not in placement:
+            # the base topology lacks this container: fall back instead of failing the whole build
+            location = next((k for k in ("rack", "closet", "building") if targets[k] is not None), None)
+        if location is None or targets[location] is None:
+            raise ValueError(f"physical location {placement.get('location', default)!r} is not in the base topology "
+                             f"(available: {', '.join(available) or 'none'}); re-run `ptlab init` with a source "
+                             f"file whose Physical workspace has a building, wiring closet and rack")
+        target = targets[location]
         children = target.find("CHILDREN")
         if children is None:
             children = ET.SubElement(target, "CHILDREN")
