@@ -49,13 +49,14 @@ Use `PTLAB_DATA_DIR`, `PTLAB_LIBRARY_DIR`, `PTLAB_PTCRYPT`, or `PTLAB_PACKET_TRA
 ## Build and grade a lab
 
 ```bash
+ptlab lint examples/static-two-sites.toml
 ptlab build examples/static-two-sites.toml --output-dir work
 ptlab build examples/static-two-sites.toml --output-dir work --open
 ptlab check examples/static-two-sites.toml work/student-saved.pka
 ptlab models
 ```
 
-The build command writes the activity and an `-answer.md` guide. Generated files and the private template library are intentionally ignored by Git.
+`ptlab lint` checks the spec (ports, cabling, addressing, gateways, grade statements) and then proves the lab against itself: the answer network must score 100 % on the lab's own grade statements, and every hidden fault, applied alone, must make at least one graded item fail. `ptlab build` runs the same checks first and refuses to write a lab that fails them (`--force` overrides). The build command writes the activity and an `-answer.md` guide. Generated files and the private template library are intentionally ignored by Git.
 
 Use source files from the same Packet Tracer generation your learners use. A `.pka` generated from newer device templates may not open in an older Packet Tracer release.
 

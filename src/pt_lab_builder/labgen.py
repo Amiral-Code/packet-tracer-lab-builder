@@ -467,8 +467,25 @@ def answer_guide(spec, answer_cfg_snippets, items):
     return "\n".join(lines) + "\n"
 
 
-def build(path, open_after=False, output_dir=None):
+def verify(spec, quiet=False):
+    """Lint the spec, then prove the lab against its own grade statements. Returns True if usable."""
+    from . import validate
+    lint = validate.lint(spec)
+    if not quiet or lint:
+        lint.report("spec check")
+    if lint.errors:
+        return False
+    checks, passed, total, at_start = validate.selfcheck(spec)
+    if not quiet or checks:
+        checks.report(f"self-check (answer {passed}/{total}, start {at_start}/{total}, "
+                      f"{len(spec.get('fault', []))} fault(s))")
+    return not checks.errors
+
+
+def build(path, open_after=False, output_dir=None, force=False):
     spec = load_spec(path)
+    if not verify(copy.deepcopy(spec)) and not force:
+        die("not built: fix the errors above (or pass --force to build anyway)")
     start = build_topology(spec, configs_for(spec, "start"), pcs_for(spec, "start"))
     answer = build_topology(spec, configs_for(spec, "answer"), pcs_for(spec, "answer"))
     items, _ = compile_grade(spec)

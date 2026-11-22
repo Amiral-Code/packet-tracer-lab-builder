@@ -18,11 +18,18 @@ Write original scenarios, instructions, topologies, and faults. Do not copy NetA
 
 For the TOML structure, grading statements, device/link rules, and known serialization invariants, read [references/spec-schema.md](references/spec-schema.md). When the request includes a Physical workspace or physical cabling, also read [references/physical-mode.md](references/physical-mode.md).
 
-Build with:
+Check, then build:
 
 ```bash
-ptlab build SPEC.toml --output-dir OUTPUT
+ptlab lint SPEC.toml                       # spec check + self-check, no file written
+ptlab build SPEC.toml --output-dir OUTPUT  # runs the same checks first and refuses on errors
 ```
+
+`ptlab lint` proves the lab before anyone opens it: ports exist and are cabled once, addresses are valid and
+unique, host gateways sit in their subnet, every grade statement is valid, the **answer network scores 100 %**
+against the lab's own grade statements, and **every fault, applied alone, makes at least one graded item fail**.
+Fix every error; never use `--force` to ship a lab. Treat warnings as review items (for example, graded items
+that already pass at the start of a configure lab give free points).
 
 Use `--open` only after telling the user that Packet Tracer will appear. Validate the generated file in a compatible Packet Tracer version when GUI access is available, and never terminate a Packet Tracer process the validation did not start.
 

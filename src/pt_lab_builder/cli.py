@@ -41,6 +41,9 @@ def parser() -> argparse.ArgumentParser:
     build.add_argument("spec", type=Path)
     build.add_argument("--output-dir", type=Path)
     build.add_argument("--open", action="store_true", dest="open_after")
+    build.add_argument("--force", action="store_true", help="build even if the spec check or self-check fails")
+    lint = sub.add_parser("lint", help="check a spec and prove its answer network against its grade statements")
+    lint.add_argument("spec", type=Path)
     check = sub.add_parser("check", help="grade a student's saved .pka")
     check.add_argument("spec", type=Path)
     check.add_argument("activity", type=Path)
@@ -62,8 +65,10 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("ptlab init: pass --build-codec and/or at least one --source PATH")
         return doctor()
     if args.command == "build":
-        labgen.build(str(args.spec), args.open_after, args.output_dir)
+        labgen.build(str(args.spec), args.open_after, args.output_dir, force=args.force)
         return 0
+    if args.command == "lint":
+        return 0 if labgen.verify(labgen.load_spec(str(args.spec))) else 1
     if args.command == "check":
         return labgen.check(str(args.spec), str(args.activity))
     if args.command == "models":
