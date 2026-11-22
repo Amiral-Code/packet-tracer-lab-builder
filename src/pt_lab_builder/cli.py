@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 import sys
 
@@ -42,6 +43,9 @@ def parser() -> argparse.ArgumentParser:
     build.add_argument("--output-dir", type=Path)
     build.add_argument("--open", action="store_true", dest="open_after")
     build.add_argument("--force", action="store_true", help="build even if the spec check or self-check fails")
+    build.add_argument("--password", default=os.environ.get("PTLAB_PASSWORD"),
+                       help="lock the Activity Wizard with this password (default: $PTLAB_PASSWORD); keep it out of "
+                            "the spec, which is meant to be shared")
     lint = sub.add_parser("lint", help="check a spec and prove its answer network against its grade statements")
     lint.add_argument("spec", type=Path)
     check = sub.add_parser("check", help="grade a student's saved .pka")
@@ -65,7 +69,7 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("ptlab init: pass --build-codec and/or at least one --source PATH")
         return doctor()
     if args.command == "build":
-        labgen.build(str(args.spec), args.open_after, args.output_dir, force=args.force)
+        labgen.build(str(args.spec), args.open_after, args.output_dir, force=args.force, password=args.password)
         return 0
     if args.command == "lint":
         return 0 if labgen.verify(labgen.load_spec(str(args.spec))) else 1

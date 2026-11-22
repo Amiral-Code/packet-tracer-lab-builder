@@ -22,11 +22,11 @@ not yet confirmed live; **open** = available in Packet Tracer, not used yet.
 | Complex-PDU tests | the same with a TCP PDU to a port (HTTP 80, HTTPS 443, SSH 22, Telnet 23, or explicit port) | same scenario, complex PDU | built from observed TCP encodings; live outcome confirmation pending; UDP/DNS unknown |
 | Overall feedback | message when complete / incomplete (HTML) | `OVERALL_COMPLETE_FEEDBACK`, `OVERALL_INCOMPLETE_FEEDBACK` | used (generic); custom per-lab text built |
 | Dynamic feedback | live "Completion: x %" while working | `DYNAMIC_PERCENTAGE_FEEDBACK` | used |
-| Timer | elapsed time or a countdown limit | `ACTIVITY TIMERTYPE`, `COUNTDOWNMS`, `COUNTDOWNLEFT` | built; countdown encoding observed in real activities, live expiry pending |
+| Timer | elapsed time, a countdown limit, or none | `ACTIVITY TIMERTYPE` (0 elapsed, 1 countdown, 2 none), `COUNTDOWNMS`, `COUNTDOWNLEFT` | built; values from the activity window's code, live expiry pending |
 | Answer convergence | fast-forward the answer network before comparing (OSPF/STP need time) | `ACTIVITY FORWARD_ANS_SIM_MS` | built; field observed, non-zero behaviour needs live confirmation |
 | User profile locking | changing the student name resets the activity | `USER_PROFILE_LOCKED` | built; live reset behaviour pending |
-| Password | locks the Activity Wizard (uppercase MD5 of the password, corroborated by `Util::md5Digest`) | `ACTIVITY PASS` | built; MD5 is an edit deterrent, not secure storage |
-| Locking tree | named switches, `on="yes"`: block Physical/Simulation, CLI/Config/Desktop tabs, delete/move/create devices, cabling, Check Results, Reset; per-device locks; **start in a Physical location**; open a device's dialog on start | `LOCKINGTREE` | built presets: `cli-only`, `realtime-only`, `exam`; Physical start location still open |
+| Password | locks the Activity Wizard: MD5(fixed salt + password), salt also in `ACTIVITY VALUE`; reproduces a real NetAcad hash | `ACTIVITY PASS`, `VALUE` | built (`--password`); an edit deterrent, not secure storage |
+| Locking tree | named switches, `on="yes"`: block Physical/Simulation, CLI/Config/Desktop tabs, delete/move/create devices, cabling, Check Results, Reset; per-device locks; **start in a Physical location**; open a device's dialog on start | `LOCKINGTREE` | built presets: `cli-only`, `realtime-only`, `logical-only`, `fixed-topology`, `exam`; `start_in` site closet (live check pending) |
 | Initial network setup | alternative starting values for chosen items | `INITIALSETUP` | open |
 | Object location sets | several logical layouts, picked at random or by variable | `OBJECT_LOCATIONS` | open |
 | Variable Manager | seed/number/string/IP pools: per-student random names and addressing; "Entire Range" accepts any pool value as correct | `VARIABLE_MANAGER` | open: anti-copying, like `lab pt mystery` |

@@ -85,8 +85,8 @@ def lint(spec) -> Issues:
         issues.error("[activity] must be a table")
         activity = {}
     timer = activity.get("timer", "elapsed")
-    if timer not in ("elapsed", "countdown"):
-        issues.error(f"[activity] timer must be elapsed or countdown, not {timer!r}")
+    if timer not in ("elapsed", "countdown", "none"):
+        issues.error(f"[activity] timer must be elapsed, countdown or none, not {timer!r}")
     if timer == "countdown" or "countdown_minutes" in activity:
         minutes = activity.get("countdown_minutes", lab.get("time", 30))
         if isinstance(minutes, bool) or not isinstance(minutes, int) or minutes <= 0:
@@ -94,13 +94,24 @@ def lint(spec) -> Issues:
     convergence = activity.get("answer_convergence_ms", 0)
     if isinstance(convergence, bool) or not isinstance(convergence, int) or convergence < 0:
         issues.error("[activity] answer_convergence_ms must be a non-negative integer")
-    if "wizard_password" in activity and not isinstance(activity["wizard_password"], str):
-        issues.error("[activity] wizard_password must be a string")
+    if "wizard_password" in activity:
+        if not isinstance(activity["wizard_password"], str):
+            issues.error("[activity] wizard_password must be a string")
+        else:
+            issues.warn("[activity] wizard_password is readable by anyone who has the spec: "
+                        "prefer ptlab build --password or $PTLAB_PASSWORD")
     if "profile_locked" in activity and not isinstance(activity["profile_locked"], bool):
         issues.error("[activity] profile_locked must be true or false")
     preset = activity.get("locking_preset", "none")
-    if not isinstance(preset, str) or preset not in ptlab.LOCKING_PRESETS:
-        issues.error(f"[activity] locking_preset must be one of {', '.join(ptlab.LOCKING_PRESETS)}, not {preset!r}")
+    presets = [preset] if isinstance(preset, str) else preset if isinstance(preset, list) else [None]
+    for p in presets:
+        if p not in ptlab.LOCKING_PRESETS:
+            issues.error(f"[activity] locking_preset must be one or a list of {', '.join(ptlab.LOCKING_PRESETS)}, "
+                         f"not {p!r}")
+    if "fixed-topology" in presets and any(lk.get("student") for lk in spec.get("link", [])):
+        issues.error("[activity] locking_preset fixed-topology locks cabling, but this lab has student = true links")
+    if "start_in" in activity and activity["start_in"] not in {s.get("name") for s in spec.get("site", [])}:
+        issues.error(f"[activity] start_in {activity['start_in']!r} is not the name of a [[site]]")
     for field in ("complete_feedback", "incomplete_feedback"):
         if field in activity and not isinstance(activity[field], str):
             issues.error(f"[activity] {field} must be a string")

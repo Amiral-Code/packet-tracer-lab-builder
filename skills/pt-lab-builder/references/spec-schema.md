@@ -66,18 +66,21 @@ interface G0/0
 
 Activity controls are optional. A countdown defaults to `[lab].time` when `countdown_minutes` is omitted.
 `answer_convergence_ms` lets the answer network settle before Packet Tracer evaluates protocols such as OSPF or
-STP. `wizard_password` protects the Activity Wizard; it is stored in the `.pka` as Packet Tracer's uppercase MD5
-digest, so treat it as an edit deterrent rather than strong security. Feedback accepts the same compact
-paragraph/`code`/`**bold**` markup as instruction text.
+STP; it defaults to 60000 when the answer configuration runs OSPF, EIGRP, RIP, BGP, HSRP or EtherChannel.
+The Activity Wizard password comes from `ptlab build --password` or `$PTLAB_PASSWORD`, not from the spec (specs are
+meant to be shared; `wizard_password` still works but lint warns). Packet Tracer stores it as MD5 of a fixed salt plus
+the password, so treat it as an edit deterrent: it keeps students out of the Activity Wizard, not out of the file.
+The complete feedback defaults to the lab's `debrief`. Feedback accepts the same compact paragraph/`code`/`**bold**`
+markup as instruction text.
 
 ```toml
 [activity]
-timer = "countdown"                 # "elapsed" is the default
+timer = "countdown"                 # "elapsed" (default), "countdown" or "none"
 countdown_minutes = 75              # positive whole minutes
 answer_convergence_ms = 30000       # non-negative milliseconds
-wizard_password = "instructor-edit-password"
 profile_locked = true
-locking_preset = "cli-only"         # none, cli-only, realtime-only, or exam
+locking_preset = ["cli-only", "fixed-topology"]   # one preset or a list
+start_in = "HQ"                     # open the activity inside this [[site]]'s wiring closet
 incomplete_feedback = "Review the failed items and verify the related `show` commands."
 complete_feedback = "All assessed outcomes pass. **Save your file** before leaving the lab."
 ```
@@ -87,8 +90,13 @@ Locking presets only enable named switches already present in the local activity
 - `cli-only` disables the Config tab on devices while leaving router/switch CLI and endpoint Desktop access.
 - `realtime-only` disables switching to Simulation mode.
 - `exam` combines both and also disables the command log and copy/paste.
+- `logical-only` disables switching to the Physical workspace.
+- `fixed-topology` stops the student adding, deleting or re-cabling devices. It is the default for labs without
+  `student = true` links; it cannot be combined with them.
 
-All presets leave Check Results and Reset Activity available. They do not yet select a Physical start location.
+All presets leave Check Results and Reset Activity available. `start_in` switches on the locking tree's "Start in
+Physical Location" for the site's wiring closet; labs with student cabling start in the first site's closet by
+default.
 
 Grading statements (one string each; quote multi-word fields of `in` with double quotes):
 

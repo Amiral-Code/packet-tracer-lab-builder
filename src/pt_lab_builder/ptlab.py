@@ -307,36 +307,56 @@ def instructions_html(a):
             f'<b>ptlab check SPEC SAVED.pka</b> in a terminal.</p></body></html>')
 
 
+# Activity Wizard password: CActivityWizard::m_enablePassBtn_clicked hashes Util::md5Digest(SALT, utf8(password))
+# = MD5(SALT + password), upper-case hex, into ACTIVITY PASS; real files also carry the salt in ACTIVITY VALUE.
+# Verified: this reproduces the PASS of a real NetAcad activity from its known password.
+PASSWORD_SALT = bytes.fromhex("c0a801be79392311a09bc602")
+# CActivityFile timer type (ACTIVITY TIMERTYPE, stored unchanged in field 0x330): the activity window draws
+# "Time Elapsed" for 0 and "Time Left" (countdown) for 1, and no timer for anything else.
+TIMER_TYPES = {"elapsed": "0", "countdown": "1", "none": "2"}
+
+
+def password_hash(password):
+    return hashlib.md5(PASSWORD_SALT + password.encode("utf-8")).hexdigest().upper()
+
+
 def activity_attributes(settings):
-    """Serialize the activity controls whose XML values are confirmed in real files."""
+    """Serialize the activity controls (timer, answer convergence, wizard password)."""
     timer = settings.get("timer", "elapsed")
     countdown_ms = int(settings.get("countdown_minutes", 0)) * 60_000 if timer == "countdown" else 0
     password = settings.get("wizard_password", "")
-    password_hash = hashlib.md5(password.encode("utf-8")).hexdigest().upper() if password else ""
-    return {
+    attrs = {
         "COUNTDOWNLEFT": str(countdown_ms),
         "ELAPSED": "0",
-        "TIMERTYPE": "2" if timer == "countdown" else "0",
+        "TIMERTYPE": TIMER_TYPES[timer],
         "COUNTDOWNMS": str(countdown_ms),
         "FORWARD_ANS_SIM_MS": str(int(settings.get("answer_convergence_ms", 0))),
-        "PASS": password_hash,
+        "PASS": password_hash(password) if password else "",
         "COUNTDOWN_EXPIRED": "0",
         "ENABLED": "no",
     }
+    if password:
+        attrs["VALUE"] = PASSWORD_SALT.decode("latin-1")
+    return attrs
 
 
 LOCKING_PRESETS = {
     "none": (),
     "cli-only": ("Use Config Tab", "Router/Switch Config Tab", "Device Use Config Tab"),
     "realtime-only": ("Switching to Simulation",),
+    "logical-only": ("Switching to Physical",),
+    # the student cannot add, delete or re-cable devices (do not combine with student cabling)
+    "fixed-topology": ("Create Devices", "Remove Devices", "Connect Links", "Disconnect Links"),
     "exam": ("Use Config Tab", "Router/Switch Config Tab", "Device Use Config Tab",
              "Switching to Simulation", "View Command Log", "Copy and Paste"),
 }
 
 
 def apply_locking_preset(locking_tree, preset):
-    """Enable every matching global or per-device switch in a copied Packet Tracer locking tree."""
-    wanted = set(LOCKING_PRESETS[preset])
+    """Enable every matching global or per-device switch in a copied Packet Tracer locking tree.
+    preset: one name or a list of names."""
+    names = [preset] if isinstance(preset, str) else list(preset)
+    wanted = {switch for name in names for switch in LOCKING_PRESETS[name]}
     found = set()
     for node in locking_tree.iter("NODE"):
         ident = node.findtext("ID")
@@ -347,6 +367,44 @@ def apply_locking_preset(locking_tree, preset):
     if missing:
         die(f"activity base has no locking switch(es): {', '.join(sorted(missing))}")
     return found
+
+
+def set_physical_locations(locking_tree, start_tree, start_location=None):
+    """Rebuild the locking tree's Physical Locations branch from the generated network (the activity base's
+    branch names the base file's own UUIDs). Each container gets "Enter" and "Start in Location" switches keyed
+    by its UUID path from the intercity; start_location (a container NAME) is switched on."""
+    branch = next((n for n in locking_tree.iter("NODE") if n.findtext("ID") == "Physical Locations"), None)
+    workspace = start_tree.getroot().find("PHYSICALWORKSPACE")
+    if branch is None or workspace is None:
+        if start_location:
+            die("cannot set a start location: the activity base or network has no physical workspace")
+        return
+    for child in branch.findall("NODE"):
+        branch.remove(child)
+    found = []
+
+    def add(parent, node, path):
+        if node.findtext("TYPE") in ("4", "6"):       # racks and devices are not locations
+            return
+        uid = node.findtext("UUID_STR")
+        here = path + [uid]
+        entry = ET.SubElement(parent, "NODE", {"on": "no"})
+        ET.SubElement(entry, "ID").text = ",".join(here)
+        ET.SubElement(entry, "TEXT").text = node.findtext("NAME")
+        for ident, text in (("Enter", "Enter"), ("Start in Location", "Start in Physical Location")):
+            switch = ET.SubElement(entry, "NODE", {"on": "no"})
+            ET.SubElement(switch, "ID").text = ident
+            ET.SubElement(switch, "TEXT").text = text
+            if ident == "Start in Location" and start_location and node.findtext("NAME") == start_location:
+                switch.set("on", "yes")
+                found.append(node.findtext("NAME"))
+        for child in node.findall("CHILDREN/NODE"):
+            add(entry, child, here)
+
+    for top in workspace.findall("NODE"):
+        add(branch, top, [])
+    if start_location and not found:
+        die(f"start location {start_location!r} is not a city, building or wiring closet of this network")
 
 
 def build_pka(a, start_tree, answer_tree):
@@ -371,6 +429,7 @@ def build_pka(a, start_tree, answer_tree):
     settings = a.get("activity", {})
     locking_tree = copy.deepcopy(base.find("LOCKINGTREE"))
     apply_locking_preset(locking_tree, settings.get("locking_preset", "none"))
+    set_physical_locations(locking_tree, start_tree, settings.get("start_location"))
     act.append(locking_tree)
     act.append(copy.deepcopy(start_tree.getroot().find("OPTIONS")) if start_tree.getroot().find("OPTIONS") is not None
                else copy.deepcopy(base.find("OPTIONS")))

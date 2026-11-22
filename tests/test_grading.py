@@ -159,11 +159,41 @@ class GradeStatements(unittest.TestCase):
     def test_activity_controls_use_confirmed_packet_tracer_values(self):
         attrs = ptlab.activity_attributes({"timer": "countdown", "countdown_minutes": 10,
                                            "answer_convergence_ms": 30000, "wizard_password": "lab-lock"})
-        self.assertEqual(attrs["TIMERTYPE"], "2")
+        self.assertEqual(attrs["TIMERTYPE"], "1")          # 0 = "Time Elapsed", 1 = "Time Left", other = none
         self.assertEqual(attrs["COUNTDOWNMS"], "600000")
         self.assertEqual(attrs["COUNTDOWNLEFT"], "600000")
         self.assertEqual(attrs["FORWARD_ANS_SIM_MS"], "30000")
-        self.assertEqual(attrs["PASS"], hashlib.md5(b"lab-lock").hexdigest().upper())
+        self.assertEqual(attrs["PASS"], hashlib.md5(ptlab.PASSWORD_SALT + b"lab-lock").hexdigest().upper())
+        self.assertEqual(attrs["VALUE"].encode("latin-1"), ptlab.PASSWORD_SALT)
+
+    def test_password_hash_matches_a_real_activity(self):
+        # a published NetAcad activity locked with the widely known instructor password
+        self.assertEqual(ptlab.password_hash("PT_ccna5"), "468D92E6B15141624011AD1B03B46B63")
+
+    def test_no_password_means_no_salt(self):
+        attrs = ptlab.activity_attributes({})
+        self.assertEqual((attrs["PASS"], attrs["TIMERTYPE"]), ("", "0"))
+        self.assertNotIn("VALUE", attrs)
+
+    def test_physical_locations_follow_the_generated_network(self):
+        net = ET.Element("PACKETTRACER5")
+        ws = ET.SubElement(net, "PHYSICALWORKSPACE")
+        def node(parent, kind, name, uid):
+            n = ET.SubElement(parent, "NODE")
+            for tag, val in (("TYPE", kind), ("NAME", name), ("UUID_STR", uid)):
+                ET.SubElement(n, tag).text = val
+            return ET.SubElement(n, "CHILDREN")
+        city = node(node(ws, "0", "Intercity", "{a}"), "1", "Tiznit", "{b}")
+        closet = node(node(city, "2", "Branch", "{c}"), "3", "Branch Closet", "{d}")
+        node(closet, "4", "Rack 1", "{e}")
+        locking = ET.Element("LOCKINGTREE")
+        branch = ET.SubElement(locking, "NODE", {"on": "no"})
+        ET.SubElement(branch, "ID").text = "Physical Locations"
+        ptlab.set_physical_locations(locking, ET.ElementTree(net), "Branch Closet")
+        ids = [n.findtext("ID") for n in branch.iter("NODE") if n.findtext("ID", "").startswith("{")]
+        self.assertEqual(ids, ["{a}", "{a},{b}", "{a},{b},{c}", "{a},{b},{c},{d}"])   # racks are not locations
+        started = [n for n in branch.iter("NODE") if n.findtext("ID") == "Start in Location" and n.get("on") == "yes"]
+        self.assertEqual(len(started), 1)
 
     def test_locking_preset_enables_matching_global_and_device_switches(self):
         locking = ET.Element("LOCKINGTREE")

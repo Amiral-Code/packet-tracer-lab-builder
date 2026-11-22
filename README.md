@@ -105,7 +105,7 @@ devices = ["BR-R1", "BR-SW1", "BR-PC1"]
 
 See [the specification reference](skills/pt-lab-builder/references/spec-schema.md) and [Physical mode](skills/pt-lab-builder/references/physical-mode.md).
 
-For everything Packet Tracer activities can do, and what the builder uses so far, see [Packet Tracer capabilities](docs/packet-tracer-capabilities.md).
+For everything Packet Tracer activities can do, and what the builder uses so far, see [Packet Tracer capabilities](docs/packet-tracer-capabilities.md). The plan to finish the project is in [the roadmap](docs/roadmap.md).
 
 ## Development
 

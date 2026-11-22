@@ -693,7 +693,32 @@ def verify(spec, quiet=False):
     return not checks.errors
 
 
-def build(path, open_after=False, output_dir=None, force=False):
+DYNAMIC = re.compile(r"^(router (ospf|eigrp|rip|bgp)|standby |channel-group |spanning-tree mode)", re.M)
+
+
+def needs_convergence(spec):
+    """Routing protocols, HSRP, EtherChannel and STP need time before the answer network is compared."""
+    return any(DYNAMIC.search(re.sub(r"^\s+", "", text, flags=re.M))
+               for text in spec.get("config", {}).get("answer", {}).values())
+
+
+def start_location(spec):
+    """[activity] start_in = site name -> that site's wiring closet. Cabling labs start in the first site's
+    closet by default, so the student lands next to the rack."""
+    activity = spec.get("activity", {})
+    sites = spec.get("site", [])
+    name = activity.get("start_in")
+    if name is None and any(lk.get("student") for lk in spec.get("link", [])) and sites:
+        name = sites[0]["name"]
+    if not name:
+        return None
+    site = next((s for s in sites if s["name"] == name), None)
+    if site is None:
+        die(f"[activity] start_in: no [[site]] named {name!r}")
+    return site.get("closet") or f"{name} Wiring Closet"
+
+
+def build(path, open_after=False, output_dir=None, force=False, password=None):
     spec = load_spec(path)
     if not verify(copy.deepcopy(spec)) and not force:
         die("not built: fix the errors above (or pass --force to build anyway)")
@@ -704,6 +729,14 @@ def build(path, open_after=False, output_dir=None, force=False):
     if tests:
         ptlab.add_connectivity_tests(answer.tree, tests)
     settings = dict(spec.get("activity", {}))
+    if password:
+        settings["wizard_password"] = password
+    if "answer_convergence_ms" not in settings and needs_convergence(spec):
+        settings["answer_convergence_ms"] = 60_000
+    if "start_location" not in settings:
+        settings["start_location"] = start_location(spec)
+    if "locking_preset" not in settings and not any(lk.get("student") for lk in spec.get("link", [])):
+        settings["locking_preset"] = "fixed-topology"
     if settings.get("timer", "elapsed") == "countdown":
         settings.setdefault("countdown_minutes", spec["lab"].get("time", 30))
     complete_feedback = settings.pop("complete_feedback", None)

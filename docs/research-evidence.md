@@ -46,10 +46,14 @@ Static executable evidence:
 
 ## Inferred and implemented
 
-- Countdown serialization uses type `2` and initializes `COUNTDOWNLEFT` to the same millisecond value as
-  `COUNTDOWNMS`; this is a direct generalization from the two observed countdown activities.
-- Activity Wizard passwords are written as uppercase MD5. The inference combines the 32-hex file values with the
-  `Util::md5Digest` symbol. MD5 offers no meaningful password secrecy.
+- Timer type: `TIMERTYPE` is stored unchanged in `CActivityFile` field 0x330 (`getTimerType`/`setTimerType`).
+  The activity window (`CInstructionDialog`) draws "Time Elapsed" for 0, "Time Left" for 1, and no timer for any
+  other value. Countdown is therefore written as `1`. The two type-2 files above carry countdown values but show no
+  timer; their values are most likely left over from an earlier setting.
+- Activity Wizard password: `CActivityWizard::m_enablePassBtn_clicked` calls `Util::md5Digest(salt, utf8(password))`,
+  which is MD5 over a fixed 12-byte salt (`c0a801be79392311a09bc602`, built inline) followed by the password,
+  upper-case hex. Real files store the salt in `ACTIVITY VALUE` (the "opaque outer activity value" above). The formula
+  reproduces the `PASS` of a published NetAcad activity from its widely known password. It is an edit deterrent only.
 - TCP outcome statements reproduce the observed type-1 PDU shape. Aliases map HTTP/HTTPS/SSH/Telnet to their
   standard TCP ports; arbitrary ports use `tcp SRC DST PORT`.
 - `cli-only`, `realtime-only`, and `exam` presets enable only locking switches found by exact name in the local
@@ -63,7 +67,8 @@ Static executable evidence:
   live confirmation on services and ACLs configured by the builder.
 - No reliable saved UDP PDU encoding was recovered in this survey. DNS/UDP generation is intentionally omitted
   rather than guessed.
-- Current locking-preset effects still need live confirmation. Starting inside a generated Physical location cannot
-  safely reuse source-template UUID paths and remains open.
+- Current locking-preset effects still need live confirmation. The Physical Locations branch is regenerated from the
+  generated network's own UUID paths (intercity, city, building, wiring closet; racks are not locations); "Start in
+  Location" on a generated closet still needs live confirmation.
 - Variable Manager authoring, regular-expression answers, scoring-model partial credit, and script modules remain
   research tasks.
