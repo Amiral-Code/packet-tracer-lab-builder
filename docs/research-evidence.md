@@ -70,5 +70,15 @@ Static executable evidence:
 - Current locking-preset effects still need live confirmation. The Physical Locations branch is regenerated from the
   generated network's own UUID paths (intercity, city, building, wiring closet; racks are not locations); "Start in
   Location" on a generated closet still needs live confirmation.
+
+## 2026-11-22 live results
+
+- Wizard password (salted hash): **confirmed**: the Activity Wizard asked for it and accepted it.
+- Countdown (`TIMERTYPE="1"`): **confirmed**: the activity window showed Time Left.
+- Start in closet: **failed** on the first try. `CActivityFile::doStartingTasks` first tests the Interface switch
+  with ID "Physical Workspace" (text "Start in Physical Workspace"); only then does it walk Physical Locations
+  and call `CWorkspace::switchTo(path)` → `CPhysicalObject::getFromPath`. The generated location IDs match the
+  scheme of real activities (cumulative UUID paths present in all three networks). The builder now switches on
+  "Start in Physical Workspace" together with the location; re-check pending.
 - Variable Manager authoring, regular-expression answers, scoring-model partial credit, and script modules remain
   research tasks.

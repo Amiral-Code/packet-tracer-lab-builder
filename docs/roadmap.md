@@ -32,12 +32,12 @@ The live checklist (one sitting, about 30 minutes, in `~/Study/labs/ccna/pt/work
 
 | Check | File | Pass when |
 |---|---|---|
-| Wizard password | `branch-cabling.pka` (password `tiznit`) | Extensions → Activity Wizard asks for it, `tiznit` opens it, a wrong one doesn't |
-| Start in closet | `branch-cabling.pka` | Physical view opens inside Branch Wiring Closet |
+| ~~Wizard password~~ confirmed | `branch-cabling.pka` (password `tiznit`) | Extensions → Activity Wizard asks for it, `tiznit` opens it, a wrong one doesn't |
+| Start in closet (2nd try) | `branch-cabling.pka` | the activity opens in the Physical view, inside Branch Wiring Closet |
 | Hints | any lab, before doing anything | Check Results → each red item shows its hint |
 | Debrief | any lab | the last instruction page is the debrief; it is also the complete feedback |
 | Fixed topology | `static-two-sites.pka` | deleting a device or a cable is refused |
-| Countdown | Northstar (90 min) | the activity window shows Time Left counting down |
+| ~~Countdown~~ confirmed | Northstar (90 min) | the activity window shows Time Left counting down |
 | Config lines | `static-two-sites.pka` | the two `ip route` items turn green |
 | Sub-command lines | Northstar | `in`/`access`/`trunk`/`ospf` items turn green when fixed |
 | TCP tests | a small ACL lab (to build) | `http ... ` passes, `telnet ... fail` passes only with the ACL in place |

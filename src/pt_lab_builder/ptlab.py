@@ -405,6 +405,13 @@ def set_physical_locations(locking_tree, start_tree, start_location=None):
         add(branch, top, [])
     if start_location and not found:
         die(f"start location {start_location!r} is not a city, building or wiring closet of this network")
+    if start_location:
+        # CActivityFile::doStartingTasks first checks Interface > "Physical Workspace" ("Start in Physical
+        # Workspace"); without it the activity opens in the Logical view and the location is never shown
+        start_physical = next((n for n in locking_tree.iter("NODE") if n.findtext("ID") == "Physical Workspace"), None)
+        if start_physical is None:
+            die("the activity base has no 'Start in Physical Workspace' switch")
+        start_physical.set("on", "yes")
 
 
 def build_pka(a, start_tree, answer_tree):

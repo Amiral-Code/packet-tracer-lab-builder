@@ -187,6 +187,8 @@ class GradeStatements(unittest.TestCase):
         closet = node(node(city, "2", "Branch", "{c}"), "3", "Branch Closet", "{d}")
         node(closet, "4", "Rack 1", "{e}")
         locking = ET.Element("LOCKINGTREE")
+        workspace = ET.SubElement(locking, "NODE", {"on": "no"})
+        ET.SubElement(workspace, "ID").text = "Physical Workspace"
         branch = ET.SubElement(locking, "NODE", {"on": "no"})
         ET.SubElement(branch, "ID").text = "Physical Locations"
         ptlab.set_physical_locations(locking, ET.ElementTree(net), "Branch Closet")
@@ -194,6 +196,7 @@ class GradeStatements(unittest.TestCase):
         self.assertEqual(ids, ["{a}", "{a},{b}", "{a},{b},{c}", "{a},{b},{c},{d}"])   # racks are not locations
         started = [n for n in branch.iter("NODE") if n.findtext("ID") == "Start in Location" and n.get("on") == "yes"]
         self.assertEqual(len(started), 1)
+        self.assertEqual(workspace.get("on"), "yes")   # "Start in Physical Workspace", or the view stays Logical
 
     def test_locking_preset_enables_matching_global_and_device_switches(self):
         locking = ET.Element("LOCKINGTREE")
