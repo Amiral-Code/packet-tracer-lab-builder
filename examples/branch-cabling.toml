@@ -145,7 +145,7 @@ steps = [
   "BR-SW1 **Fa0/1** to BR-PC1, **Fa0/2** to BR-PC2, **Fa0/24** to BR-SRV1.",
   "BR-R1 **G0/2** to ADMIN-PC. Router to PC directly: think about which cable that needs.",
 ]
-hint = "Unlike devices (PC-switch, router-switch) use straight-through. Like devices, and a PC wired straight to a router, use crossover."
+hint = "Cables between rooms are easier to draw in the Logical view: they appear in the Physical view too, where you can check where they run. Unlike devices (PC-switch, router-switch) use straight-through. Like devices, and a PC wired straight to a router, use crossover."
 why = "A straight-through cable joins a transmitting pair to a receiving pair only when the two ends use different pinouts; a PC and a router both transmit on the same pins, so they need the pairs crossed."
 
 [[part]]

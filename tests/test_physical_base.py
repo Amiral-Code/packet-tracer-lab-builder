@@ -35,11 +35,11 @@ class PhysicalBaseSelection(unittest.TestCase):
 class RackStacking(unittest.TestCase):
     def test_devices_stack_by_model_height(self):
         xs = stack_rack([("router-2911", None), ("switch-2960", None), ("server", None)])
-        self.assertEqual(xs, {0: 0, 1: 6, 2: 10})
+        self.assertEqual(xs, {0: 0, 1: 7, 2: 11})
 
     def test_slot_orders_devices_from_the_top(self):
         xs = stack_rack([("switch-2960", 2), ("router-1941", 1)])
-        self.assertEqual(xs, {1: 0, 0: 7})
+        self.assertEqual(xs, {1: 0, 0: 8})
 
     def test_reserved_power_unit_is_skipped(self):
         xs = stack_rack([("switch-2960", None)] * 6, reserved=[(20, 24)])

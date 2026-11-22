@@ -40,7 +40,7 @@ physical = { location = "building", x = 600, y = 240 }
 ```
 
 Rack devices are stacked from the top by their real height (measured in Packet Tracer 9.0.1: 1RU gear 4 units,
-2911 6, 1941 7, server 14, WLC 5; the rack holds about 124). `ptlab lint` rejects a rack that overflows; split
+2911 7, 1941 8, server 15, WLC 5, each with room for its label; the rack holds about 124). `ptlab lint` rejects a rack that overflows; split
 devices into sites or move some to the closet. In the building view, the wiring-closet icon covers about
 x/y 40-400. The floor grid starts at x 470, and `ptlab lint` warns about explicit positions under the icon.
 

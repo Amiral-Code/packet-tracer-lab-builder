@@ -75,7 +75,9 @@ def physical_path(root, target):
 # heights: 1RU gear ~3 units, 2911 ~5.3, 1941 ~6.4, Server-PT ~13; the WLC 2504/3504 sit on a shelf tray. From
 # about X=128 a device lands on the rack's bottom frame. Heights below include a small gap.
 RACK_CAPACITY = 124
-RACK_UNITS = {"router-1941": 7, "router-2911": 6, "server": 14, "wlc-2504": 5, "wlc-3504": 5,
+# + about 1 unit for the name label drawn under each device (confirmed in a student's rack screenshot: at 6 units
+# the 2911's label was hidden under the next device).
+RACK_UNITS = {"router-1941": 8, "router-2911": 7, "server": 15, "wlc-2504": 5, "wlc-3504": 5,
               "router-pt": 12, "router-pt-empty": 12}
 DEFAULT_RACK_UNITS = 4
 FLOOR_X, FLOOR_Y = 470, 120               # first free floor position beside the wiring closet
