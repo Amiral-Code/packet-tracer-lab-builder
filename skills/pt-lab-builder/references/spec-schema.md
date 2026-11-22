@@ -4,7 +4,7 @@ One TOML file describes one original Packet Tracer activity.
 
 | Section | Purpose |
 |---|---|
-| `[lab]` | `id`, `title`, level 1-5, `kind`, exam/track, minutes, scenario, objectives, label options |
+| `[lab]` | `id`, `title`, level 1-5, `kind` (`configure`, `troubleshoot`, or `mixed`), exam/track, minutes, scenario, objectives, label options |
 | `[physical]` | Optional inherited city/building/closet/rack names |
 | `[[device]]` | Unique `name`, library `model`, optional logical `x`/`y`, optional physical placement |
 | `[[link]]` | `a = "R1 G0/0"`, `b = "SW1 G0/1"`; optional cable override |
@@ -46,6 +46,21 @@ interface G0/0
 """
 symptom = "The WAN is down."
 explain = "G0/0 was administratively shut; use `no shutdown`."
+```
+
+Mixed labs also start from the answer. They then apply `[config.start]` as an overlay for intentionally unfinished
+configuration, followed by every declared fault. Use `unconfigured_hosts` for endpoints the learner must address:
+
+```toml
+[config]
+unconfigured_hosts = ["PC1"]
+
+[config.start]
+R1 = """
+interface G0/0
+ no ip address
+ shutdown
+"""
 ```
 
 Supported grading statements:

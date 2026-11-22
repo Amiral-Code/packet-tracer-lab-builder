@@ -1,0 +1,761 @@
+[lab]
+id = "northstar-enterprise-recovery"
+title = "Northstar Cutover: Enterprise Recovery Capstone"
+level = 4
+kind = "mixed"
+exam = "CCNA capstone / ENCOR foundations"
+time = 90
+labels = true
+scenario = """
+Northstar Logistics is completing a weekend network cutover. The new campus core,
+branch edge, access layer, and public-services segment have been cabled in a staging
+facility. Most of the intended configuration is present, but several deployment tasks
+were left unfinished and six independent faults were introduced during handover.
+
+Act as the escalation engineer. Complete the documented baseline, recover the failed
+services from symptoms rather than a fault list, and prove that segmentation, dynamic
+routing, address assignment, IPv6, security policy, and edge translation all agree.
+The Physical workspace represents the staging rack and desks; grading is based on the
+logical configuration, not rack position.
+"""
+objectives = [
+  "Complete VLAN, trunk, LACP EtherChannel, Rapid PVST, and access-port security configuration",
+  "Restore Layer 3 SVIs, inter-VLAN routing, DHCP relay, and static endpoint addressing",
+  "Recover multi-area OSPF across the campus, backbone, and branch",
+  "Verify dual-stack interface addressing and IPv6 static routing",
+  "Enforce an extended ACL and restore PAT toward the public-services segment",
+  "Diagnose six hidden faults using a structured evidence-first workflow",
+]
+
+[physical]
+city = "Casablanca"
+building = "Northstar Network Staging Facility"
+closet = "Enterprise Lab MDF"
+rack = "Enterprise Rack A"
+
+[[device]]
+name = "PUBLIC-SRV"
+model = "server"
+x = 90
+y = 170
+physical = { location = "rack", slot = 1 }
+
+[[device]]
+name = "HQ-EDGE"
+model = "router-isr4331"
+x = 350
+y = 150
+physical = { location = "rack", slot = 2 }
+
+[[device]]
+name = "CORE1"
+model = "l3switch-3560"
+x = 610
+y = 150
+physical = { location = "rack", slot = 3 }
+
+[[device]]
+name = "HQ-SW1"
+model = "switch-2960"
+x = 500
+y = 340
+physical = { location = "rack", slot = 4 }
+
+[[device]]
+name = "HQ-SW2"
+model = "switch-2960"
+x = 735
+y = 340
+physical = { location = "rack", slot = 5 }
+
+[[device]]
+name = "HQ-USER1"
+model = "pc"
+x = 430
+y = 540
+physical = { location = "building", x = 86, y = 215 }
+
+[[device]]
+name = "HQ-OPS1"
+model = "pc"
+x = 650
+y = 540
+physical = { location = "building", x = 172, y = 215 }
+
+[[device]]
+name = "HQ-SRV1"
+model = "server"
+x = 820
+y = 540
+physical = { location = "rack", slot = 6 }
+
+[[device]]
+name = "BR-R1"
+model = "router-2911"
+x = 1050
+y = 150
+physical = { location = "rack", slot = 7 }
+
+[[device]]
+name = "BR-SW1"
+model = "switch-2960"
+x = 1050
+y = 340
+physical = { location = "rack", slot = 8 }
+
+[[device]]
+name = "BR-PC1"
+model = "pc"
+x = 960
+y = 540
+physical = { location = "building", x = 258, y = 215 }
+
+[[device]]
+name = "BR-SRV1"
+model = "server"
+x = 1140
+y = 540
+physical = { location = "rack", slot = 9 }
+
+[[link]]
+a = "PUBLIC-SRV Fa0"
+b = "HQ-EDGE G0/0/2"
+
+[[link]]
+a = "HQ-EDGE G0/0/1"
+b = "CORE1 G0/1"
+
+[[link]]
+a = "HQ-EDGE G0/0/0"
+b = "BR-R1 G0/0"
+
+[[link]]
+a = "CORE1 Fa0/23"
+b = "HQ-SW1 Fa0/23"
+
+[[link]]
+a = "CORE1 Fa0/24"
+b = "HQ-SW1 Fa0/24"
+
+[[link]]
+a = "CORE1 Fa0/21"
+b = "HQ-SW2 Fa0/23"
+
+[[link]]
+a = "CORE1 Fa0/22"
+b = "HQ-SW2 Fa0/24"
+
+[[link]]
+a = "HQ-SW1 G0/1"
+b = "HQ-SW2 G0/1"
+
+[[link]]
+a = "HQ-SW1 Fa0/1"
+b = "HQ-USER1 Fa0"
+
+[[link]]
+a = "HQ-SW2 Fa0/1"
+b = "HQ-OPS1 Fa0"
+
+[[link]]
+a = "HQ-SW2 Fa0/2"
+b = "HQ-SRV1 Fa0"
+
+[[link]]
+a = "BR-R1 G0/1"
+b = "BR-SW1 G0/1"
+
+[[link]]
+a = "BR-SW1 Fa0/1"
+b = "BR-PC1 Fa0"
+
+[[link]]
+a = "BR-SW1 Fa0/2"
+b = "BR-SRV1 Fa0"
+
+[[area]]
+label = "PUBLIC SERVICES  203.0.113.0/24"
+color = "orange"
+devices = ["PUBLIC-SRV"]
+pad = 45
+
+[[area]]
+label = "HQ CAMPUS  VLANs 10 / 20 / 30 / 99"
+color = "cyan"
+devices = ["CORE1", "HQ-SW1", "HQ-SW2", "HQ-USER1", "HQ-OPS1", "HQ-SRV1"]
+pad = 50
+
+[[area]]
+label = "BRANCH  VLANs 40 / 50 / 99"
+color = "yellow"
+devices = ["BR-R1", "BR-SW1", "BR-PC1", "BR-SRV1"]
+pad = 50
+
+[[note]]
+text = "OSPF AREA 0  |  WAN 10.255.255.0/30  |  IPv6 2001:DB8:0:FF::/64"
+x = 705
+y = 70
+
+[[note]]
+text = "OSPF AREA 10"
+x = 570
+y = 250
+
+[[note]]
+text = "OSPF AREA 20"
+x = 1030
+y = 250
+
+[addressing]
+rows = [
+  ["HQ-EDGE",   "G0/0/0",  "10.255.255.1/30", ""],
+  ["HQ-EDGE",   "G0/0/1",  "10.255.0.1/30",   ""],
+  ["HQ-EDGE",   "G0/0/2",  "203.0.113.1/24",  ""],
+  ["CORE1",     "G0/1",    "10.255.0.2/30",   ""],
+  ["CORE1",     "Vlan10",  "10.10.10.1/24",   ""],
+  ["CORE1",     "Vlan20",  "10.10.20.1/24",   ""],
+  ["CORE1",     "Vlan30",  "10.10.30.1/24",   ""],
+  ["CORE1",     "Vlan99",  "10.10.99.1/24",   ""],
+  ["BR-R1",     "G0/0",    "10.255.255.2/30", ""],
+  ["BR-R1",     "G0/1.40", "172.16.40.1/24",  ""],
+  ["BR-R1",     "G0/1.50", "172.16.50.1/24",  ""],
+  ["BR-R1",     "G0/1.99", "172.16.99.1/24",  ""],
+  ["HQ-USER1",  "Fa0",     "dhcp",             ""],
+  ["HQ-OPS1",   "Fa0",     "10.10.20.20/24",   "10.10.20.1"],
+  ["HQ-SRV1",   "Fa0",     "10.10.30.10/24",   "10.10.30.1"],
+  ["BR-PC1",    "Fa0",     "dhcp",             ""],
+  ["BR-SRV1",   "Fa0",     "172.16.50.10/24",  "172.16.50.1"],
+  ["PUBLIC-SRV", "Fa0",    "203.0.113.10/24",  "203.0.113.1"],
+]
+
+[config]
+unconfigured_hosts = ["HQ-USER1", "HQ-SRV1", "BR-PC1", "BR-SRV1", "PUBLIC-SRV"]
+
+[config.start]
+HQ-EDGE = """
+interface G0/0/1
+ no ip address
+ no ipv6 address 2001:DB8:0:1::1/64
+ shutdown
+"""
+CORE1 = """
+no ip routing
+no ipv6 unicast-routing
+interface G0/1
+ no ip address
+ no ipv6 address 2001:DB8:0:1::2/64
+ shutdown
+interface Vlan10
+ no ip address
+ no ipv6 address 2001:DB8:10::1/64
+ shutdown
+interface Vlan20
+ no ip address
+ shutdown
+interface Vlan30
+ no ip address
+ shutdown
+interface Vlan99
+ no ip address
+ shutdown
+"""
+HQ-SW1 = """
+interface Fa0/1
+ no switchport access vlan 10
+ no switchport port-security
+ no switchport port-security maximum 2
+ no switchport port-security violation restrict
+ shutdown
+"""
+HQ-SW2 = """
+interface Fa0/1
+ no switchport access vlan 20
+ no switchport port-security
+ shutdown
+interface Fa0/2
+ no switchport access vlan 30
+ shutdown
+"""
+BR-SW1 = """
+interface Fa0/1
+ no switchport access vlan 40
+ no switchport port-security
+ shutdown
+interface Fa0/2
+ no switchport access vlan 50
+ shutdown
+"""
+
+[config.answer]
+HQ-EDGE = """
+ipv6 unicast-routing
+ip dhcp excluded-address 10.10.10.1 10.10.10.20
+ip dhcp excluded-address 172.16.40.1 172.16.40.20
+ip dhcp pool HQ-USERS
+ network 10.10.10.0 255.255.255.0
+ default-router 10.10.10.1
+ dns-server 10.10.30.10
+ip dhcp pool BR-USERS
+ network 172.16.40.0 255.255.255.0
+ default-router 172.16.40.1
+ dns-server 10.10.30.10
+ip access-list standard NAT_INSIDE
+ permit 10.10.0.0 0.0.255.255
+ permit 172.16.0.0 0.0.255.255
+interface G0/0/0
+ description BACKBONE_TO_BRANCH
+ ip address 10.255.255.1 255.255.255.252
+ ipv6 address 2001:DB8:0:FF::1/64
+ no shutdown
+interface G0/0/1
+ description CAMPUS_TRANSIT_TO_CORE1
+ ip address 10.255.0.1 255.255.255.252
+ ipv6 address 2001:DB8:0:1::1/64
+ ip nat inside
+ no shutdown
+interface G0/0/2
+ description PUBLIC_SERVICES_OUTSIDE
+ ip address 203.0.113.1 255.255.255.0
+ ip nat outside
+ no shutdown
+router ospf 10
+ router-id 10.10.10.10
+ network 10.255.0.0 0.0.0.3 area 0
+ network 10.255.255.0 0.0.0.3 area 0
+ default-information originate
+ip route 0.0.0.0 0.0.0.0 GigabitEthernet0/0/2
+ipv6 route 2001:DB8:10::/64 2001:DB8:0:1::2
+ipv6 route 2001:DB8:40::/64 2001:DB8:0:FF::2
+ip nat inside source list NAT_INSIDE interface GigabitEthernet0/0/2 overload
+"""
+CORE1 = """
+ip routing
+ipv6 unicast-routing
+vlan 10
+ name HQ-USERS
+vlan 20
+ name HQ-OPERATIONS
+vlan 30
+ name HQ-SERVERS
+vlan 99
+ name NETWORK-MANAGEMENT
+interface G0/1
+ description ROUTED_TRANSIT_TO_HQ_EDGE
+ no switchport
+ ip address 10.255.0.2 255.255.255.252
+ ipv6 address 2001:DB8:0:1::2/64
+ no shutdown
+interface Vlan10
+ description HQ_USER_GATEWAY
+ ip address 10.10.10.1 255.255.255.0
+ ipv6 address 2001:DB8:10::1/64
+ ip helper-address 10.255.0.1
+ ip access-group USERS-IN in
+ no shutdown
+interface Vlan20
+ description HQ_OPERATIONS_GATEWAY
+ ip address 10.10.20.1 255.255.255.0
+ no shutdown
+interface Vlan30
+ description HQ_SERVER_GATEWAY
+ ip address 10.10.30.1 255.255.255.0
+ no shutdown
+interface Vlan99
+ description HQ_MANAGEMENT_GATEWAY
+ ip address 10.10.99.1 255.255.255.0
+ no shutdown
+interface Port-channel1
+ description LACP_TRUNK_TO_HQ_SW1
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30,99
+interface Port-channel2
+ description LACP_TRUNK_TO_HQ_SW2
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30,99
+interface Fa0/23
+ channel-group 1 mode active
+ no shutdown
+interface Fa0/24
+ channel-group 1 mode active
+ no shutdown
+interface Fa0/21
+ channel-group 2 mode active
+ no shutdown
+interface Fa0/22
+ channel-group 2 mode active
+ no shutdown
+ip access-list extended USERS-IN
+ permit udp 10.10.10.0 0.0.0.255 any eq domain
+ permit tcp 10.10.10.0 0.0.0.255 host 203.0.113.10 eq www
+ permit ip 10.10.10.0 0.0.0.255 10.10.30.0 0.0.0.255
+ deny ip 10.10.10.0 0.0.0.255 10.10.20.0 0.0.0.255
+ permit ip any any
+router ospf 10
+ router-id 1.1.1.1
+ network 10.255.0.0 0.0.0.3 area 0
+ network 10.10.10.0 0.0.0.255 area 10
+ network 10.10.20.0 0.0.0.255 area 10
+ network 10.10.30.0 0.0.0.255 area 10
+ network 10.10.99.0 0.0.0.255 area 10
+ passive-interface Vlan10
+ passive-interface Vlan20
+ passive-interface Vlan30
+ passive-interface Vlan99
+ipv6 route ::/0 2001:DB8:0:1::1
+spanning-tree mode rapid-pvst
+spanning-tree vlan 10,20,30,99 priority 24576
+"""
+HQ-SW1 = """
+vlan 10
+ name HQ-USERS
+vlan 20
+ name HQ-OPERATIONS
+vlan 30
+ name HQ-SERVERS
+vlan 99
+ name NETWORK-MANAGEMENT
+interface Port-channel1
+ description LACP_TRUNK_TO_CORE1
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30,99
+interface Fa0/23
+ channel-group 1 mode active
+ no shutdown
+interface Fa0/24
+ channel-group 1 mode active
+ no shutdown
+interface G0/1
+ description REDUNDANT_TRUNK_TO_HQ_SW2
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30
+ no shutdown
+interface Fa0/1
+ description HQ_USER1
+ switchport mode access
+ switchport access vlan 10
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security violation restrict
+ no shutdown
+interface Vlan99
+ ip address 10.10.99.11 255.255.255.0
+ no shutdown
+ip default-gateway 10.10.99.1
+spanning-tree mode rapid-pvst
+spanning-tree vlan 10,30 priority 28672
+"""
+HQ-SW2 = """
+vlan 10
+ name HQ-USERS
+vlan 20
+ name HQ-OPERATIONS
+vlan 30
+ name HQ-SERVERS
+vlan 99
+ name NETWORK-MANAGEMENT
+interface Port-channel2
+ description LACP_TRUNK_TO_CORE1
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30,99
+interface Fa0/23
+ channel-group 2 mode active
+ no shutdown
+interface Fa0/24
+ channel-group 2 mode active
+ no shutdown
+interface G0/1
+ description REDUNDANT_TRUNK_TO_HQ_SW1
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30
+ no shutdown
+interface Fa0/1
+ description HQ_OPERATIONS1
+ switchport mode access
+ switchport access vlan 20
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ switchport port-security
+ switchport port-security violation restrict
+ no shutdown
+interface Fa0/2
+ description HQ_SERVER1
+ switchport mode access
+ switchport access vlan 30
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+interface Vlan99
+ ip address 10.10.99.12 255.255.255.0
+ no shutdown
+ip default-gateway 10.10.99.1
+spanning-tree mode rapid-pvst
+spanning-tree vlan 20 priority 28672
+"""
+BR-R1 = """
+ipv6 unicast-routing
+interface G0/0
+ description BACKBONE_TO_HQ_EDGE
+ ip address 10.255.255.2 255.255.255.252
+ ipv6 address 2001:DB8:0:FF::2/64
+ no shutdown
+interface G0/1
+ description BRANCH_8021Q_TRUNK
+ no ip address
+ no shutdown
+interface G0/1.40
+ encapsulation dot1Q 40
+ ip address 172.16.40.1 255.255.255.0
+ ipv6 address 2001:DB8:40::1/64
+ ip helper-address 10.255.255.1
+interface G0/1.50
+ encapsulation dot1Q 50
+ ip address 172.16.50.1 255.255.255.0
+interface G0/1.99
+ encapsulation dot1Q 99
+ ip address 172.16.99.1 255.255.255.0
+router ospf 10
+ router-id 2.2.2.2
+ network 10.255.255.0 0.0.0.3 area 0
+ network 172.16.40.0 0.0.0.255 area 20
+ network 172.16.50.0 0.0.0.255 area 20
+ network 172.16.99.0 0.0.0.255 area 20
+ passive-interface G0/1.40
+ passive-interface G0/1.50
+ passive-interface G0/1.99
+ipv6 route ::/0 2001:DB8:0:FF::1
+"""
+BR-SW1 = """
+vlan 40
+ name BR-USERS
+vlan 50
+ name BR-SERVERS
+vlan 99
+ name NETWORK-MANAGEMENT
+interface G0/1
+ description TRUNK_TO_BR_R1
+ switchport mode trunk
+ switchport trunk allowed vlan 40,50,99
+ no shutdown
+interface Fa0/1
+ description BRANCH_USER1
+ switchport mode access
+ switchport access vlan 40
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ switchport port-security
+ switchport port-security violation restrict
+ no shutdown
+interface Fa0/2
+ description BRANCH_SERVER1
+ switchport mode access
+ switchport access vlan 50
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+interface Vlan99
+ ip address 172.16.99.11 255.255.255.0
+ no shutdown
+ip default-gateway 172.16.99.1
+spanning-tree mode rapid-pvst
+"""
+
+[[fault]]
+device = "HQ-SW1"
+apply = """
+interface Port-channel1
+ switchport trunk allowed vlan 10,20
+"""
+symptom = "VLANs 30 and 99 disappear when traffic uses the HQ-SW1 uplink."
+explain = "Port-channel1 allowed only VLANs 10 and 20. Restore the intended 10,20,30,99 allowed list on the logical port-channel."
+
+[[fault]]
+device = "HQ-SW2"
+find = "spanning-tree vlan 20 priority 28672"
+replace = "spanning-tree vlan 20 priority 61440"
+symptom = "The operations VLAN elects an unexpected secondary root after a topology change."
+explain = "HQ-SW2 had an inferior VLAN 20 bridge priority. Restore priority 28672."
+
+[[fault]]
+device = "CORE1"
+find = " ip helper-address 10.255.0.1"
+replace = " ip helper-address 10.255.0.9"
+symptom = "HQ-USER1 cannot obtain a DHCP lease after its access port is restored."
+explain = "Vlan10 relayed DHCP to a nonexistent address. Point the helper to HQ-EDGE at 10.255.0.1."
+
+[[fault]]
+device = "HQ-EDGE"
+apply = """
+no ip nat inside source list NAT_INSIDE interface GigabitEthernet0/0/2 overload
+"""
+symptom = "Inside-to-public tests create no translation entries on HQ-EDGE."
+explain = "The PAT rule was missing. Restore overload using NAT_INSIDE and G0/0/2."
+
+[[fault]]
+device = "BR-R1"
+find = " network 10.255.255.0 0.0.0.3 area 0"
+replace = " network 10.255.255.0 0.0.0.3 area 20"
+symptom = "BR-R1 never forms an IPv4 OSPF adjacency with HQ-EDGE."
+explain = "The WAN was placed in OSPF area 20 on BR-R1 while HQ-EDGE uses area 0. Restore area 0."
+
+[[fault]]
+device = "HQ-OPS1"
+pc = { dhcp = false, ip = "10.10.20.20", mask = "255.255.255.0", gw = "10.10.10.1" }
+symptom = "HQ-OPS1 reaches local VLAN peers but not routed destinations."
+explain = "The workstation had the user-VLAN gateway. Set its gateway to 10.10.20.1."
+
+[[part]]
+title = "Build an evidence map"
+intro = "Do not change configuration yet. Establish what is physically present, what is administratively down, and which symptoms share a likely dependency."
+steps = [
+  "Inspect both **Logical** and **Physical** workspaces. Record the rack devices, access endpoints, redundant HQ uplinks, and the router-on-a-stick branch link.",
+  "On every infrastructure device, capture `show ip interface brief`, `show vlan brief`, `show interfaces trunk`, and `show cdp neighbors` where supported.",
+  "On CORE1 and both routers, capture the routing table and OSPF neighbor state. Treat missing adjacency, missing connected routes, and missing learned routes as separate observations.",
+  "Create a short dependency order: access port, VLAN/trunk, gateway, routing, policy, then translation. Work from the bottom of that list upward.",
+]
+hint = "A failed end-to-end ping is a symptom, not a diagnosis. First prove the source host can reach its own gateway."
+why = "A disciplined baseline prevents one early configuration change from hiding a second independent fault."
+
+[[part]]
+title = "Complete the campus Layer 3 baseline"
+intro = "CORE1 and its routed transit were intentionally left incomplete. Restore the documented addressing before chasing dynamic-routing symptoms."
+steps = [
+  "Enable IPv4 and IPv6 routing on **CORE1**.",
+  "Configure and enable CORE1 G0/1 and HQ-EDGE G0/0/1 using the addressing table. Add the listed IPv6 addresses `2001:DB8:0:1::2/64` and `2001:DB8:0:1::1/64`.",
+  "Configure and enable CORE1 SVIs for VLANs 10, 20, 30, and 99. Add `2001:DB8:10::1/64` to Vlan10.",
+  "Verify connected routes and ping 10.255.0.1 from CORE1 using G0/1 as the source.",
+]
+hint = "A multilayer switch needs `ip routing`; an addressed SVI also needs its VLAN active on at least one forwarding port."
+why = "The transit and SVIs are the foundation for DHCP relay, OSPF advertisements, ACL enforcement, and inter-VLAN forwarding."
+
+[[part]]
+title = "Recover the HQ access layer"
+intro = "Complete the user/server access ports, then verify the two LACP uplinks and Rapid PVST design."
+steps = [
+  "Restore HQ-SW1 Fa0/1 as a secure VLAN 10 access port. Restore HQ-SW2 Fa0/1 in VLAN 20 and Fa0/2 in VLAN 30; enable the ports.",
+  "Verify Port-channel1 and Port-channel2 with `show etherchannel summary`. Every member should be bundled under LACP, not merely connected.",
+  "Compare the allowed VLAN lists on both ends of each port-channel and on the inter-access-switch trunk.",
+  "Use `show spanning-tree vlan 10`, `20`, and `30` to confirm the intended root and secondary-root behavior under Rapid PVST.",
+]
+hint = "Apply trunk policy to the Port-channel interface; member links inherit the logical bundle's forwarding policy."
+why = "EtherChannel removes per-link STP blocking inside a bundle, while Rapid PVST still protects the redundant switch triangle."
+
+[[part]]
+title = "Complete the branch access layer"
+intro = "The branch uses router-on-a-stick: the switch trunk carries VLANs 40, 50, and 99 to BR-R1 subinterfaces."
+steps = [
+  "Restore BR-SW1 Fa0/1 as a secure VLAN 40 user port and Fa0/2 as a VLAN 50 server port; enable both.",
+  "Verify G0/1 is an 802.1Q trunk allowing VLANs 40, 50, and 99.",
+  "Confirm BR-R1 G0/1 is enabled and that its .40, .50, and .99 subinterfaces use the expected encapsulation and gateways.",
+  "Set **BR-PC1** to DHCP and assign **BR-SRV1** its static address and gateway from the table.",
+]
+hint = "The parent router interface carries no IPv4 address, but it must be up for every subinterface to operate."
+why = "Router-on-a-stick is a compact branch design that makes VLAN tags and gateway subinterfaces directly visible."
+
+[[part]]
+title = "Restore services and endpoint addressing"
+intro = "Address the static servers, then follow the DHCP request path from each client to HQ-EDGE and back."
+steps = [
+  "Set **HQ-USER1** to DHCP. Configure HQ-SRV1 and PUBLIC-SRV with the static values in the addressing table.",
+  "On CORE1, verify the VLAN 10 helper address. On BR-R1, verify the helper under G0/1.40.",
+  "Inspect the HQ-EDGE DHCP pools and exclusions. Renew both DHCP clients and confirm each receives an address from its local subnet.",
+  "Correct HQ-OPS1 so that its default gateway belongs to the operations VLAN.",
+]
+hint = "The relay inserts the gateway-interface address so the DHCP server can select the correct pool."
+why = "DHCP across routed boundaries depends on correct access VLANs, active gateways, routing, relay, and server pools at the same time."
+
+[[part]]
+title = "Recover OSPF and IPv6 reachability"
+intro = "IPv4 uses multi-area OSPF; IPv6 uses the documented static next hops. Validate each control plane independently."
+steps = [
+  "Restore the OSPF adjacency between HQ-EDGE and BR-R1. The WAN belongs to area 0 on both ends.",
+  "Confirm CORE1 advertises campus networks in area 10 and BR-R1 advertises branch networks in area 20 while access interfaces remain passive.",
+  "Verify HQ-EDGE learns 10.10.0.0/16 subnets through CORE1 and 172.16.0.0/16 subnets through BR-R1 as specific OSPF routes.",
+  "Verify the IPv6 addresses and static routes, then ping the opposite router's WAN IPv6 address and the remote user-prefix gateway.",
+]
+hint = "OSPF neighbors must agree on area, timers, network type, authentication, and subnet. Start with area and interface state here."
+why = "Separating IPv4 OSPF evidence from IPv6 static-routing evidence makes dual-stack failures much easier to isolate."
+
+[[part]]
+title = "Validate policy and PAT"
+intro = "Finish with policy: users may reach approved services, the operations VLAN is isolated from users, and inside addresses are translated toward public services."
+steps = [
+  "Review the USERS-IN ACL on CORE1 and confirm it is applied inbound on Vlan10. Explain the first-match behavior for DNS, HTTP, server access, operations isolation, and the final permit.",
+  "Verify NAT inside/outside roles on HQ-EDGE and restore the missing PAT overload statement if needed.",
+  "Generate traffic from an inside host toward PUBLIC-SRV and inspect `show ip nat translations` and `show ip nat statistics`.",
+  "Prove that the user VLAN cannot initiate traffic toward the operations VLAN while approved destinations remain reachable.",
+]
+hint = "A correct ACL does not create translations; a correct NAT rule does not override a denied packet. Check policy before translation counters."
+why = "Security policy and address translation are separate forwarding stages and should be verified separately."
+
+[[part]]
+title = "Close the six incident tickets"
+intro = "Perform a final sweep without consulting the answer guide. Each ticket should have evidence, a minimal correction, and a post-change verification."
+steps = [
+  "Confirm all required VLANs cross the HQ-SW1 port-channel.",
+  "Confirm HQ-SW2 has the intended VLAN 20 spanning-tree priority.",
+  "Confirm the HQ user DHCP relay targets a real address.",
+  "Confirm HQ-EDGE has an active PAT overload rule.",
+  "Confirm the branch WAN participates in the correct OSPF area.",
+  "Confirm HQ-OPS1 uses its own VLAN's gateway.",
+]
+hint = "For each ticket, save one before/after command output. A passing ping alone is not enough evidence for EtherChannel, STP, DHCP relay, OSPF area, ACL, or NAT correctness."
+why = "Operational handover requires reproducible evidence, not only a network that happens to pass one test."
+
+[grade]
+items = [
+  "ip CORE1 G0/1 10.255.0.2/30",
+  "up CORE1 G0/1",
+  "ip CORE1 Vlan10 10.10.10.1/24",
+  "up CORE1 Vlan10",
+  "ip CORE1 Vlan20 10.10.20.1/24",
+  "ip CORE1 Vlan30 10.10.30.1/24",
+  "ip CORE1 Vlan99 10.10.99.1/24",
+  "line CORE1 ip routing",
+  "line CORE1 ipv6 unicast-routing",
+  "line CORE1 ipv6 address 2001:DB8:0:1::2/64",
+  "line CORE1 ipv6 address 2001:DB8:10::1/64",
+  "line CORE1 ip helper-address 10.255.0.1",
+  "ip HQ-EDGE G0/0/1 10.255.0.1/30",
+  "up HQ-EDGE G0/0/1",
+  "line HQ-EDGE ip nat inside source list NAT_INSIDE interface GigabitEthernet0/0/2 overload",
+  "line BR-R1 network 10.255.255.0 0.0.0.3 area 0",
+  "line HQ-SW1 switchport access vlan 10",
+  "line HQ-SW1 switchport port-security",
+  "line HQ-SW1 switchport trunk allowed vlan 10,20,30,99",
+  "line HQ-SW2 switchport access vlan 20",
+  "line HQ-SW2 switchport port-security",
+  "line HQ-SW2 switchport access vlan 30",
+  "line HQ-SW2 spanning-tree vlan 20 priority 28672",
+  "line BR-SW1 switchport access vlan 40",
+  "line BR-SW1 switchport port-security",
+  "line BR-SW1 switchport access vlan 50",
+  "dhcp HQ-USER1",
+  "dhcp BR-PC1",
+  "gw HQ-OPS1 10.10.20.1",
+  "ip HQ-SRV1 Fa0 10.10.30.10/24",
+  "gw HQ-SRV1 10.10.30.1",
+  "ip BR-SRV1 Fa0 172.16.50.10/24",
+  "gw BR-SRV1 172.16.50.1",
+  "ip PUBLIC-SRV Fa0 203.0.113.10/24",
+  "gw PUBLIC-SRV 203.0.113.1",
+]
+
+debrief = """
+The recovery sequence matters more than any individual command. Access-layer state
+creates the connected networks; connected networks enable the routing control plane;
+routing delivers service traffic to policy; policy decides whether translation is ever
+reached. The six faults were deliberately placed at different points in that chain.
+
+The Physical workspace is a staging representation, not an assessed cabling exercise.
+Use it to connect a logical device to its rack or desk location, but use the logical
+workspace and verification commands as the source of grading evidence.
+"""
+questions = [
+  "Why can a port-channel appear up while silently dropping selected VLANs?",
+  "Which OSPF area mismatch prevented the branch adjacency, and why did IPv6 testing remain a separate question?",
+  "Why must the DHCP relay address be verified even when the client access port and VLAN are correct?",
+  "At what stage does the USERS-IN ACL act relative to the HQ-EDGE PAT rule?",
+  "Which three commands provide the strongest handover evidence for STP, OSPF, and NAT?",
+]

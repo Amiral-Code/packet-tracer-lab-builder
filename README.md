@@ -1,6 +1,6 @@
 # Packet Tracer Lab Builder
 
-Build original Cisco Packet Tracer activities (`.pka`) from readable TOML specifications. A lab can contain a topology drawn from scratch, start and answer networks, multi-page instructions, hidden troubleshooting faults, Check Results items, an answer guide, and a basic Physical workspace.
+Build original Cisco Packet Tracer activities (`.pka`) from readable TOML specifications. A lab can contain a topology drawn from scratch, configure, troubleshoot, or mixed student states, start and answer networks, multi-page instructions, hidden troubleshooting faults, Check Results items, an answer guide, and a basic Physical workspace.
 
 This project is independent of Cisco. Cisco Packet Tracer and Cisco device data are not distributed here. You must install Packet Tracer and initialize a private local template library from `.pkt`/`.pka` files you are allowed to use.
 

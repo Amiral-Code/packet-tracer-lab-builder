@@ -182,11 +182,15 @@ def pc_settings(spec):
     for row in addressing_rows(spec):
         dev, iface, cidr = row[0], row[1], row[2]
         gw = row[3] if len(row) > 3 else ""
-        if not cidr or cidr.lower() == "dhcp":
+        if not cidr:
             continue
-        if any(d["name"] == dev and ptbuild_model_is_host(d["model"]) for d in spec["device"]):
-            n = ipaddress.ip_interface(cidr)
-            out[dev] = {"ip": str(n.ip), "mask": str(n.netmask), "gw": gw}
+        if not any(d["name"] == dev and ptbuild_model_is_host(d["model"]) for d in spec["device"]):
+            continue
+        if cidr.lower() == "dhcp":
+            out[dev] = {"dhcp": True}
+            continue
+        n = ipaddress.ip_interface(cidr)
+        out[dev] = {"ip": str(n.ip), "mask": str(n.netmask), "gw": gw}
     return out
 
 
@@ -321,14 +325,19 @@ def configs_for(spec, which):
         tpl_cfg[d["name"]] = [l.text or "" for l in tpl.findall("ENGINE/RUNNINGCONFIG/LINE")]
     cfg = spec.get("config", {})
     kind = spec["lab"].get("kind", "configure")
+    answer_based_start = kind in ("troubleshoot", "mixed")
     for name, factory in tpl_cfg.items():
         snippet = f"hostname {name}\n"
-        if which == "answer" or kind == "troubleshoot":
+        if which == "answer" or answer_based_start:
             snippet += cfg.get("answer", {}).get(name, "")
         else:
             snippet += cfg.get("start", {}).get(name, "")
         text = merge(factory, snippet)
-        if which == "start" and kind == "troubleshoot":
+        if which == "start" and kind == "mixed":
+            # Mixed activities start from the reference configuration, then use config.start
+            # as an overlay for the intentionally unfinished work before hidden faults are added.
+            text = merge(text, cfg.get("start", {}).get(name, ""))
+        if which == "start" and answer_based_start:
             for f in spec.get("fault", []):
                 if f["device"] == name and "apply" in f:   # faults written as CLI, merged onto the answer
                     text = merge(text, f["apply"])
