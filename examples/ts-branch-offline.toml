@@ -1,0 +1,209 @@
+[lab]
+id = "ts-branch-offline"
+title = "Troubleshooting: The Branch Is Offline"
+level = 3
+kind = "troubleshoot"
+exam = "CCNA 1.10, 3.3 - troubleshooting, static routing"
+time = 35
+scenario = """
+Monday morning, 08:05. The help desk forwards three tickets:
+
+- "Nobody at HQ can reach the branch file server."
+- "My PC at the branch has no network since the weekend." (BR-PC1)
+- "The HQ printer queue is empty, half of HQ cannot even reach the gateway."
+
+The network was working on Friday. Over the weekend a contractor "tidied up" three devices.
+Static routing joins HQ and the branch through the provider router ISP. Find the **four**
+faults, fix them, and write down for each one: the symptom, the command that revealed it,
+and the fix.
+"""
+objectives = [
+  "Troubleshoot layer by layer: physical/port state, addressing, gateway, routing",
+  "Use show ip interface brief, show ip route, show interfaces status, ipconfig and tracert",
+  "Fix each fault without breaking what already works",
+]
+
+[[device]]
+name = "HQ-R1"
+model = "router-2911"
+[[device]]
+name = "HQ-SW1"
+model = "switch-2960"
+[[device]]
+name = "HQ-PC1"
+model = "pc"
+[[device]]
+name = "HQ-PC2"
+model = "pc"
+[[device]]
+name = "ISP"
+model = "router-2911"
+[[device]]
+name = "BR-R1"
+model = "router-isr4331"
+[[device]]
+name = "BR-SW1"
+model = "switch-2960"
+[[device]]
+name = "BR-PC1"
+model = "pc"
+[[device]]
+name = "BR-SRV1"
+model = "server"
+
+[[link]]
+a = "HQ-R1 G0/0"
+b = "ISP G0/0"
+[[link]]
+a = "ISP G0/1"
+b = "BR-R1 G0/0/0"
+[[link]]
+a = "HQ-R1 G0/1"
+b = "HQ-SW1 G0/1"
+[[link]]
+a = "HQ-SW1 Fa0/1"
+b = "HQ-PC1 Fa0"
+[[link]]
+a = "HQ-SW1 Fa0/2"
+b = "HQ-PC2 Fa0"
+[[link]]
+a = "BR-R1 G0/0/1"
+b = "BR-SW1 G0/1"
+[[link]]
+a = "BR-SW1 Fa0/1"
+b = "BR-SRV1 Fa0"
+[[link]]
+a = "BR-SW1 Fa0/2"
+b = "BR-PC1 Fa0"
+
+[[area]]
+label = "HQ  -  192.168.10.0/24"
+color = "cyan"
+devices = ["HQ-R1", "HQ-SW1", "HQ-PC1", "HQ-PC2"]
+[[area]]
+label = "BRANCH  -  192.168.20.0/24"
+color = "yellow"
+devices = ["BR-R1", "BR-SW1", "BR-SRV1", "BR-PC1"]
+
+[addressing]
+rows = [
+  ["HQ-R1",   "G0/0",   "203.0.113.1/30",    ""],
+  ["HQ-R1",   "G0/1",   "192.168.10.1/24",   ""],
+  ["ISP",     "G0/0",   "203.0.113.2/30",    ""],
+  ["ISP",     "G0/1",   "198.51.100.1/30",   ""],
+  ["BR-R1",   "G0/0/0", "198.51.100.2/30",   ""],
+  ["BR-R1",   "G0/0/1", "192.168.20.1/24",   ""],
+  ["HQ-PC1",  "Fa0",    "192.168.10.11/24",  "192.168.10.1"],
+  ["HQ-PC2",  "Fa0",    "192.168.10.12/24",  "192.168.10.1"],
+  ["BR-PC1",  "Fa0",    "192.168.20.11/24",  "192.168.20.1"],
+  ["BR-SRV1", "Fa0",    "192.168.20.100/24", "192.168.20.1"],
+]
+
+[config.answer]
+HQ-R1 = """
+interface G0/0
+ ip address 203.0.113.1 255.255.255.252
+ no shutdown
+interface G0/1
+ ip address 192.168.10.1 255.255.255.0
+ no shutdown
+ip route 0.0.0.0 0.0.0.0 203.0.113.2
+"""
+ISP = """
+interface G0/0
+ ip address 203.0.113.2 255.255.255.252
+ no shutdown
+interface G0/1
+ ip address 198.51.100.1 255.255.255.252
+ no shutdown
+ip route 192.168.10.0 255.255.255.0 203.0.113.1
+ip route 192.168.20.0 255.255.255.0 198.51.100.2
+"""
+BR-R1 = """
+interface G0/0/0
+ ip address 198.51.100.2 255.255.255.252
+ no shutdown
+interface G0/0/1
+ ip address 192.168.20.1 255.255.255.0
+ no shutdown
+ip route 0.0.0.0 0.0.0.0 198.51.100.1
+"""
+
+[[fault]]
+device = "ISP"
+apply = """
+no ip route 192.168.20.0 255.255.255.0 198.51.100.2
+ip route 192.168.20.0 255.255.255.0 198.51.100.6
+"""
+symptom = "HQ reaches ISP and BR-R1's WAN address, but nothing in 192.168.20.0/24 (tracert dies after 203.0.113.2)."
+explain = "ISP's route to the branch LAN pointed to 198.51.100.6, an address nobody has. show ip route 192.168.20.0 on ISP. Fix: no ip route ... 198.51.100.6, then ip route 192.168.20.0 255.255.255.0 198.51.100.2."
+[[fault]]
+device = "HQ-R1"
+apply = """
+interface G0/1
+ shutdown
+"""
+symptom = "No HQ host can ping its gateway 192.168.10.1."
+explain = "HQ-R1 G0/1 (the HQ gateway) was administratively down. show ip interface brief. Fix: interface g0/1, no shutdown."
+[[fault]]
+device = "BR-SW1"
+apply = """
+interface Fa0/2
+ shutdown
+"""
+symptom = "BR-PC1 has no link at all; BR-SRV1 on the same switch is fine."
+explain = "BR-SW1 Fa0/2 (BR-PC1's port) was shut down. show interfaces status shows it disabled. Fix: interface fa0/2, no shutdown."
+[[fault]]
+device = "BR-PC1"
+pc = { gw = "192.168.20.254" }
+symptom = "Once its port is up, BR-PC1 reaches BR-SRV1 but nothing outside the branch."
+explain = "BR-PC1's default gateway was 192.168.20.254 instead of BR-R1's 192.168.20.1. ipconfig on the PC. Fix it in Desktop > IP Configuration."
+
+[[part]]
+title = "Collect the symptoms"
+intro = "Do not change anything yet. A good troubleshooter first maps what works and what does not."
+steps = [
+  "From HQ-PC1: ping 192.168.10.1, then 203.0.113.2, then 192.168.20.100. Note where it stops.",
+  "From BR-PC1: `ipconfig`, then ping 192.168.20.100 and 192.168.20.1.",
+  "On each router: `show ip interface brief` and `show ip route`.",
+  "On BR-SW1: `show interfaces status`.",
+]
+hint = "Work bottom-up: a port that is down hides every problem above it. Fix layer 1/2 faults first, then addressing, then routing."
+why = "Collecting symptoms before touching anything stops you from 'fixing' things that were not broken and creating new faults."
+
+[[part]]
+title = "Fix the four faults"
+intro = "Four faults, on four different devices. Fix them one at a time and re-test after each fix."
+steps = [
+  "Fix the fault that keeps HQ hosts from their gateway.",
+  "Fix BR-PC1's link, then whatever still keeps BR-PC1 inside the branch.",
+  "Fix the fault that makes traffic for 192.168.20.0/24 die in the provider network.",
+  "Prove it: HQ-PC1 pings BR-SRV1 and BR-PC1, and BR-PC1 pings HQ-PC2.",
+]
+hint = "tracert from HQ-PC1 to 192.168.20.100 shows the last router that still forwards the packet. Look at that router's route for the destination."
+why = "Real outages are rarely one fault: here a layer-1 fault (shutdown), a host fault (gateway) and a routing fault (next hop) stack up."
+
+[grade]
+items = [
+  "up HQ-R1 G0/1",
+  "up BR-SW1 Fa0/2",
+  "gw BR-PC1 192.168.20.1",
+  "line ISP ip route 192.168.20.0 255.255.255.0 198.51.100.2",
+  "line HQ-R1 ip route 0.0.0.0 0.0.0.0 203.0.113.2",
+  "line BR-R1 ip route 0.0.0.0 0.0.0.0 198.51.100.1",
+]
+
+debrief = """
+Four faults, three layers. **Port state** (an interface or switch port shut down) is
+always worth checking first: it is invisible from the routing table and breaks everything
+above it. **Host settings** (gateway) only break traffic leaving the subnet. **Routing**
+faults show up with tracert as the hop where packets stop.
+
+The habit that matters: one change at a time, re-test after each, and write the evidence
+down. That is exactly what the CCNA troubleshooting questions reward.
+"""
+questions = [
+  "Why did BR-PC1's wrong gateway only become visible after its switch port was fixed?",
+  "Which single command on ISP would have shown the wrong next hop fastest?",
+  "Why does a route with a next hop nobody has still appear in the routing table?",
+]

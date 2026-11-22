@@ -1,0 +1,187 @@
+[lab]
+id = "static-two-sites"
+title = "Two Sites, One WAN: Static and Default Routing"
+level = 2
+kind = "configure"
+exam = "CCNA 3.3 - static routing"
+time = 30
+scenario = """
+The company has a head office (HQ) and a new branch office joined by a point-to-point
+WAN link. The cabling is done and the hosts are addressed, but no router knows how to
+reach the other site yet.
+
+You are the network engineer on duty. Address the routers, enable their interfaces, and
+give each site a route to the other. Use the **most specific** route on HQ and a
+**default route** on the branch, which has only one way out.
+"""
+objectives = [
+  "Address and enable router interfaces from an addressing table",
+  "Configure a static route with a next-hop address",
+  "Configure a default route on a stub (single-exit) site",
+  "Verify end-to-end reachability with ping and the routing table",
+]
+
+[physical]
+city = "Training City"
+building = "Enterprise Routing Lab"
+closet = "Main Distribution Frame"
+rack = "Rack 1"
+
+[[device]]
+name = "HQ-R1"
+model = "router-2911"
+x = 330
+y = 140
+physical = { location = "rack", slot = 1 }
+[[device]]
+name = "HQ-SW1"
+model = "switch-2960"
+x = 200
+y = 280
+physical = { location = "rack", slot = 2 }
+[[device]]
+name = "HQ-PC1"
+model = "pc"
+x = 110
+y = 410
+physical = { location = "building", x = 86, y = 215 }
+[[device]]
+name = "HQ-PC2"
+model = "pc"
+x = 290
+y = 410
+physical = { location = "building", x = 172, y = 215 }
+[[device]]
+name = "BR-R1"
+model = "router-isr4331"
+x = 660
+y = 140
+physical = { location = "rack", slot = 3 }
+[[device]]
+name = "BR-SW1"
+model = "switch-2960"
+x = 760
+y = 280
+physical = { location = "rack", slot = 4 }
+[[device]]
+name = "BR-SRV1"
+model = "server"
+x = 860
+y = 410
+physical = { location = "rack", slot = 5 }
+
+[[link]]
+a = "HQ-R1 G0/0"
+b = "BR-R1 G0/0/0"
+[[link]]
+a = "HQ-R1 G0/1"
+b = "HQ-SW1 G0/1"
+[[link]]
+a = "HQ-SW1 Fa0/1"
+b = "HQ-PC1 Fa0"
+[[link]]
+a = "HQ-SW1 Fa0/2"
+b = "HQ-PC2 Fa0"
+[[link]]
+a = "BR-R1 G0/0/1"
+b = "BR-SW1 G0/1"
+[[link]]
+a = "BR-SW1 Fa0/1"
+b = "BR-SRV1 Fa0"
+
+[[area]]
+label = "HQ  -  192.168.10.0/24"
+color = "cyan"
+devices = ["HQ-R1", "HQ-SW1", "HQ-PC1", "HQ-PC2"]
+[[area]]
+label = "BRANCH  -  192.168.20.0/24"
+color = "yellow"
+devices = ["BR-R1", "BR-SW1", "BR-SRV1"]
+
+[[note]]
+text = "WAN 10.0.0.0/30"
+x = 460
+y = 110
+
+[addressing]
+rows = [
+  ["HQ-R1",   "G0/0",   "10.0.0.1/30",       ""],
+  ["HQ-R1",   "G0/1",   "192.168.10.1/24",   ""],
+  ["BR-R1",   "G0/0/0", "10.0.0.2/30",       ""],
+  ["BR-R1",   "G0/0/1", "192.168.20.1/24",   ""],
+  ["HQ-PC1",  "Fa0",    "192.168.10.11/24",  "192.168.10.1"],
+  ["HQ-PC2",  "Fa0",    "192.168.10.12/24",  "192.168.10.1"],
+  ["BR-SRV1", "Fa0",    "192.168.20.100/24", "192.168.20.1"],
+]
+
+[config.answer]
+HQ-R1 = """
+interface G0/0
+ ip address 10.0.0.1 255.255.255.252
+ no shutdown
+interface G0/1
+ ip address 192.168.10.1 255.255.255.0
+ no shutdown
+ip route 192.168.20.0 255.255.255.0 10.0.0.2
+"""
+BR-R1 = """
+interface G0/0/0
+ ip address 10.0.0.2 255.255.255.252
+ no shutdown
+interface G0/0/1
+ ip address 192.168.20.1 255.255.255.0
+ no shutdown
+ip route 0.0.0.0 0.0.0.0 10.0.0.1
+"""
+
+[[part]]
+title = "Address and enable the router interfaces"
+intro = "Use the addressing table on the first page. Router interfaces are shut down by default."
+steps = [
+  "On **HQ-R1**, give G0/0 and G0/1 their addresses and enable them (`no shutdown`).",
+  "On **BR-R1**, do the same for G0/0/0 and G0/0/1.",
+  "Verify with `show ip interface brief`: every addressed interface must be **up/up**.",
+  "From HQ-PC1, ping its gateway 192.168.10.1. From BR-SRV1, ping 192.168.20.1.",
+]
+hint = "If an interface shows administratively down, you forgot `no shutdown`. If it is down/down, check the cable end in the topology."
+why = "Nothing routes until the connected networks exist: a router only learns a connected route when the interface is up/up with an address."
+
+[[part]]
+title = "Give each site a route to the other"
+intro = "HQ-PC1 can reach its gateway but not the branch: HQ-R1 has no route to 192.168.20.0/24 and BR-R1 has none back."
+steps = [
+  "On **HQ-R1**, add a static route to 192.168.20.0/24 with next hop 10.0.0.2.",
+  "On **BR-R1**, add a **default route** with next hop 10.0.0.1 (the branch has only one exit).",
+  "Check `show ip route` on both: look for **S** and **S\\*** entries.",
+  "From HQ-PC1, ping 192.168.20.100. Then `tracert 192.168.20.100` and read the hops.",
+]
+hint = "The next hop is the neighbour's address on the shared /30, not your own. A ping needs a route in both directions."
+why = "Static routes are explicit and predictable; a default route is the natural choice for a stub site because every unknown destination leaves through the same link."
+
+[grade]
+items = [
+  "ip HQ-R1 G0/0 10.0.0.1/30",
+  "ip HQ-R1 G0/1 192.168.10.1/24",
+  "up HQ-R1 G0/0",
+  "up HQ-R1 G0/1",
+  "ip BR-R1 G0/0/0 10.0.0.2/30",
+  "ip BR-R1 G0/0/1 192.168.20.1/24",
+  "up BR-R1 G0/0/0",
+  "up BR-R1 G0/0/1",
+  "line HQ-R1 ip route 192.168.20.0 255.255.255.0 10.0.0.2",
+  "line BR-R1 ip route 0.0.0.0 0.0.0.0 10.0.0.1",
+]
+
+debrief = """
+You built the two building blocks of every routed network: **connected routes** (from
+addressed, enabled interfaces) and **static routes** (that you tell the router about).
+
+HQ uses a specific route because a head office usually grows more destinations; the
+branch uses a default route because it has exactly one way out. In the next labs the same
+idea scales up: dynamic routing protocols such as OSPF simply build these routes for you.
+"""
+questions = [
+  "What would happen to pings from HQ-PC1 if BR-R1 had no default route?",
+  "Why is the next hop 10.0.0.2 and not 192.168.20.1?",
+  "Which command shows only the static routes on a router?",
+]

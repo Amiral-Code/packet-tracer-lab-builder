@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+build/
+dist/
+work/
+.ptlab-data/
+ptcrypt
+ptcrypt.exe
+src/pt_lab_builder/library-data/

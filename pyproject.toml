@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pt-lab-builder"
+version = "0.1.0"
+description = "Build original native Cisco Packet Tracer activities from TOML specifications"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{name = "Amiral"}]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Education",
+  "Topic :: System :: Networking",
+]
+
+[project.scripts]
+ptlab = "pt_lab_builder.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pt_lab_builder"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "skills", "examples", "tests", "README.md", "CMakeLists.txt", "pyproject.toml"]
