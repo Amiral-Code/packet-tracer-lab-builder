@@ -245,11 +245,13 @@ On ISR routers `show controllers serial` needs the port number (`show controller
   stock-state copies are used as templates. No activity grades home-router settings, so none are graded yet.
 - `examples/home-cable-internet.toml`: 10/10 items (including Port Up on the home router, modem and cloud ports)
   and 1/1 test kept by Packet Tracer's own save, 10/10 values identical to its own, cloud mapping, coax link and
-  stock home router intact in all three networks. Pending live check.
+  stock home router intact in all three networks. Live-confirmed (see below).
 - Live Check Results on `home-cable-internet.pka` (2026-11-23): all 10 items green (Port Up on the home router,
   modem and cloud ports, the provider's DHCP pool); the home router got 198.51.100.10 from the provider's pool
   through modem, coax and cloud mapping. The ping test failed only because HOME-PC had been left on a blank
   static configuration, which no Check Results item showed: `dhcp HOST` was a local check only. It now also adds
   Packet Tracer's native item `Ports > PORT > DHCP client enable` = 1 (eclass 0), as graded in two of the user's
   activities; kept and value-identical in Packet Tracer's own save (home-cable-internet 11/11, Northstar 55/55).
+- With HOME-PC on DHCP the ping test passed (live-confirmed). The saved file keeps `PORT_DHCP_ENABLE` true and the
+  gateway learned by DHCP, but not the leased address (its `IP` stays empty).
 
