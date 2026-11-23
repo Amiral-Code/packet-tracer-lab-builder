@@ -90,7 +90,7 @@ Live-confirmed 2026-11-23 (`feature-probe-2.pka`, Check Results **40/40**, Conne
   cell tower, Meraki. `configs_for` must only write IOS configuration to IOS devices.
 - ~~**Serial WAN**~~ `-serial` models (1941/2911 + HWIC-2T, 1841 + WIC-2T, ISR4321/ISR4331 + NIM-2T) taken
   whole from the user's files, serial links with a named DCE end, `clock` statement, serial lint;
-  `examples/serial-wan-triangle.toml` proven by round trip. Pending live check: `serial-wan-triangle.pka`.
+  `examples/serial-wan-triangle.toml` proven by round trip and live-confirmed (Check Results 35/35, 3/3).
 - Module insertion into an empty slot (NIM-ES2-4, SFP optics, any card mix not found whole in a file).
 - ASA labs: interfaces, security levels, ACLs, NAT objects (assessment classes exist).
 - Wireless labs: WLC-based WLANs and range in the Physical view.

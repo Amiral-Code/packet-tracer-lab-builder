@@ -220,4 +220,9 @@ Implemented: `-serial` library variants taken whole from those files, serial lin
 statement, lint for serial pairing and DCE ends. `examples/serial-wan-triangle.toml` (ISR4321 + two 1941s, three
 serial links): 32/32 items and 3/3 tests kept by Packet Tracer's own save, 32/32 values identical to Packet
 Tracer's own, 23/23 local checks on its answer network, and all three serial links kept with their DCE ends.
-Pending live check: links up and Check Results green after configuring.
+Live-confirmed 2026-11-23 (`serial-wan-triangle.pka`, Check Results **35/35**, Connectivity Tests **3/3**):
+`show controllers serial 0/1/0` on HQ reports `DCE V.35`; after configuring, every serial item, the three
+clock-rate lines and all three pings are green. In the student's saved network the DCE ports hold the configured
+`CLOCKRATE` (128000, 128000, 64000) and the DTE ports `CLOCKRATE` 0 with no `clock rate` line, so the
+` clock rate 2000000` seen on both ends in older files is a saved-configuration artefact, not live behaviour.
+On ISR routers `show controllers serial` needs the port number (`show controllers serial 0/1/0`).

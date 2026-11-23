@@ -171,7 +171,7 @@ router ospf 1
 title = "Find the DCE ends"
 intro = "Only the DCE end of a serial cable supplies the clock. Which end that is depends on the cable, not the router."
 steps = [
-  "On each router run `show controllers serial` for every serial port (on the ISR4321: `show controllers serial 0/1/0`). Note which ports say **DCE**.",
+  "On each router run `show controllers serial 0/0/0` (on HQ: `show controllers serial 0/1/0`) for every serial port. Note which ports say **DCE**.",
   "Hover the serial cables in the topology: the clock symbol marks the DCE end.",
 ]
 hint = "Three cables, three DCE ends: HQ has two of them, one depot has the third."
