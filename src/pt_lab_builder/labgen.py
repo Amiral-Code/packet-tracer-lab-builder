@@ -98,6 +98,20 @@ SHOWN_NEGATIONS = {
 }
 
 
+def asa_config(snippet):
+    """An ASA's running-config from an empty (factory) one: the snippet's commands in order, interface names
+    expanded. Unlike IOS there is no factory text to merge into (an unconfigured ASA saves no lines)."""
+    out = []
+    for raw in snippet.strip("\n").splitlines():
+        line = raw.rstrip()
+        if not line.strip() or line.strip() in ("!", "exit", "end", "conf t", "configure terminal", "enable"):
+            continue
+        if line.startswith("interface "):
+            line = "interface " + long_if(line.split(None, 1)[1])
+        out.append(line)
+    return out + ["end", ""]
+
+
 def merge(factory_lines, snippet):
     """Apply a CLI snippet (config-mode commands, running-config style) to a factory config."""
     base = blocks(factory_lines)
@@ -311,7 +325,7 @@ def ptbuild_model_is_host(model):
     return model in ("pc", "server", "laptop", "printer", "tablet", "smartphone")
 
 
-IOS_TYPES = ("Router", "Switch", "MultiLayerSwitch")
+IOS_TYPES = ("Router", "Switch", "MultiLayerSwitch", "ASA")   # devices configured with CLI text
 # home and provider gear: always a straight-through copper cable (as in the user's files and Packet Tracer's samples)
 HOME_MODELS = ("home-router", "wrt300n", "cable-modem", "dsl-modem", "cloud", "central-office")
 
@@ -343,7 +357,7 @@ def cable_for(ma, mb, pa, pb):
     if ma in HOME_MODELS or mb in HOME_MODELS:
         return "eStraightThrough"
     host = ("pc", "server", "laptop", "printer", "ipphone-7960", "ap")
-    cls = lambda m: "host" if m in host else "router" if m.startswith("router") else "switch"
+    cls = lambda m: "host" if m in host else "router" if m.startswith(("router", "asa")) else "switch"
     a, b = cls(ma), cls(mb)
     same = a == b or {a, b} == {"host", "router"}
     return "eCrossOver" if same else "eStraightThrough"
@@ -478,6 +492,7 @@ def configs_for(spec, which):
     """Running-config text per router/switch: factory + hostname + snippets (+ faults for start)."""
     out = {}
     tpl_cfg = {}
+    asa = set()
     for d in spec["device"]:
         if ptbuild_model_is_host(d["model"]):
             continue
@@ -485,6 +500,8 @@ def configs_for(spec, which):
         if tpl.findtext("ENGINE/TYPE") not in IOS_TYPES:   # home routers, modems, clouds, WLCs: no IOS
             continue
         tpl_cfg[d["name"]] = [l.text or "" for l in tpl.findall("ENGINE/RUNNINGCONFIG/LINE")]
+        if tpl.findtext("ENGINE/TYPE") == "ASA":
+            asa.add(d["name"])
     cfg = spec.get("config", {})
     kind = spec["lab"].get("kind", "configure")
     answer_based_start = kind in ("troubleshoot", "mixed")
@@ -494,8 +511,10 @@ def configs_for(spec, which):
             snippet += cfg.get("answer", {}).get(name, "")
         else:
             snippet += cfg.get("start", {}).get(name, "")
-        text = merge(factory, snippet)
-        if which == "start" and kind == "mixed":
+        text = asa_config(snippet) if name in asa else merge(factory, snippet)
+        if which == "start" and kind == "mixed" and name in asa:
+            text = asa_config(snippet + "\n" + cfg.get("start", {}).get(name, ""))
+        elif which == "start" and kind == "mixed":
             # Mixed activities start from the reference configuration, then use config.start
             # as an overlay for the intentionally unfinished work before hidden faults are added.
             text = merge(text, cfg.get("start", {}).get(name, ""))
@@ -700,6 +719,10 @@ def compile_grade(spec):
             (na, pa), (nb, pb) = lk["a"].split(None, 1), lk["b"].split(None, 1)
             if frozenset({(na, long_if(pa)), (nb, long_if(pb))}) not in graded:
                 _cable_item(items, checks, spec, na, pa, nb, pb)
+    asa = {d["name"] for d in spec.get("device", []) if str(d.get("model", "")).startswith("asa-")}
+    for it in items:                         # an ASA's config lines live in its startup-config (see ptlab.set_config)
+        if it["kind"] == "run_line" and it["device"] in asa:
+            it["kind"] = "start_line"
     return items, checks
 
 

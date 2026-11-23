@@ -690,6 +690,7 @@ def verify_values(spec, bare_saved):
     root = ptlab.read_pkt(bare_saved).getroot().find("COMPARISONS/NODE")
     if root is not None:
         walk(root, [])
+    asa = {d["name"] for d in spec.get("device", []) if str(d.get("model", "")).startswith("asa-")}
     same = 0
     for path, (value, pattern) in built.items():
         if path not in filled:
@@ -699,6 +700,10 @@ def verify_values(spec, bare_saved):
             if pattern:     # graded by its pattern; the value is only what the Activity Wizard displays
                 issues.warn(msg + " (graded by pattern)")
                 same += bool(re.search(pattern[len("{{RegEx:"):-2], filled[path]))
+            elif path.split(" > ")[0] in asa and " > Ports > " in path and filled[path] in ("0.0.0.0", "0", ""):
+                # an ASA builds its ports from its startup-config at boot, which a load-and-save does not reach:
+                # Packet Tracer's value is the unbooted state, so only a live Check Results can confirm this item
+                issues.warn(msg + " (ASA not booted in the saved file: confirm with Check Results)")
             else:
                 issues.error(msg)
         else:

@@ -29,6 +29,7 @@ WANT = {  # (TYPE, model) -> library key
     ("CableModem", "Cable-Modem-PT"): "cable-modem", ("DslModem", "DSL-Modem-PT"): "dsl-modem",
     ("CoAxialSplitter", "CoAxialSplitter-PT"): "coax-splitter",
     ("CentralOfficeServer", "Central-Office-Server"): "central-office", ("CellTower", "Cell-Tower"): "cell-tower",
+    ("ASA", "5506-X"): "asa-5506x", ("ASA", "5505"): "asa-5505",
 }
 # Packet Tracer stores no port names: it derives them per model. Names for devices without an IOS
 # configuration, as they appear on links in real files (the user's activities and Packet Tracer's samples).
@@ -43,6 +44,8 @@ PORT_NAMES = {
     "Central-Office-Server": ["Backbone", "Coaxial0/0", "Coaxial0/1", "Coaxial0/2", "Coaxial0/3", "Coaxial0/4",
                               "Coaxial0/5"],
     "Cell-Tower": ["Coaxial0"],
+    "5506-X": [f"GigabitEthernet1/{i}" for i in range(1, 9)] + ["Management1/1"],
+    "5505": [f"Ethernet0/{i}" for i in range(8)],
 }
 IOS_TYPES = ("Router", "Switch", "MultiLayerSwitch")
 # Routers with interface cards already fitted, taken whole from the user's own files: Packet Tracer stores a card as
@@ -189,6 +192,11 @@ def factory_reset(device, kind):
                     vl.remove(v)
     if kind == "home":                               # keep the stock settings (Internet port is a DHCP client)
         return eng
+    if kind == "asa":   # an ASA saved unconfigured has no running-config lines at all: start from that state
+        for tag in ("RUNNINGCONFIG", "STARTUPCONFIG"):
+            if eng.find(tag) is not None:
+                for l in list(eng.find(tag)):
+                    eng.find(tag).remove(l)
     for p in device.iter("PORT"):                    # saved addresses and descriptions on every port and host
         for tag in ("IP", "SUBNET", "PORT_GATEWAY", "PORT_DNS", "DESCRIPTION"):
             if p.find(tag) is not None:
@@ -296,6 +304,8 @@ def build(sources, destination=None):
         ifaces = [l.text.split(None, 1)[1] for l in d.findall("ENGINE/RUNNINGCONFIG/LINE")
                   if l.text and l.text.startswith("interface ")]
         model = d.find("ENGINE/TYPE").get("model")
+        if model in PORT_NAMES and d.find("ENGINE/TYPE").text == "ASA":
+            ifaces = list(PORT_NAMES[model])            # physical ports only (Vlan/Management from config)
         if not ifaces and model in PORT_NAMES:
             ifaces = list(PORT_NAMES[model])
         if not ifaces:  # hosts have no IOS config: name the ports from their card types
@@ -311,7 +321,7 @@ def build(sources, destination=None):
         strip_user_apps(d)
         ty = d.find("ENGINE/TYPE").text
         factory_reset(d, "router" if ty == "Router" else "switch" if ty in ("Switch", "MultiLayerSwitch")
-                      else "home" if ty in HOME_ROUTER_TYPES else "host")
+                      else "home" if ty in HOME_ROUTER_TYPES else "asa" if ty == "ASA" else "host")
         ET.ElementTree(d).write(devices_out / (key + ".xml"), encoding="utf-8")
         ifaces = [i for i in ifaces if "." not in i and (not i.startswith("Vlan") or i == "Vlan1")]
         index[key] = {"type": d.find("ENGINE/TYPE").text, "model": d.find("ENGINE/TYPE").get("model"),

@@ -58,14 +58,21 @@ def devices(tree):
     return out
 
 
+def is_asa(dev):
+    return dev.findtext("ENGINE/TYPE") == "ASA"
+
+
 def set_config(dev, text):
-    """Replace the running-config of a router/switch. Packet Tracer re-parses it on load."""
+    """Replace the running-config of a router/switch. Packet Tracer re-parses it on load.
+    An ASA boots from its startup-config: Packet Tracer 9 saves no ASA running-config and rebuilds it at boot,
+    so an ASA gets the same text as its startup-config too."""
     eng = dev.find("ENGINE")
-    rc = eng.find("RUNNINGCONFIG")
-    for line in list(rc):
-        rc.remove(line)
-    for line in text.strip("\n").splitlines():
-        ET.SubElement(rc, "LINE").text = line.rstrip()
+    for tag in (("RUNNINGCONFIG", "STARTUPCONFIG") if is_asa(dev) else ("RUNNINGCONFIG",)):
+        rc = eng.find(tag) if eng.find(tag) is not None else ET.SubElement(eng, tag)
+        for line in list(rc):
+            rc.remove(line)
+        for line in text.strip("\n").splitlines():
+            ET.SubElement(rc, "LINE").text = line.rstrip()
     sync_vlans(eng, text)
 
 
@@ -118,7 +125,9 @@ def set_sdm_template(dev, template):
 
 
 def get_config(dev):
-    return [(l.text or "").rstrip() for l in dev.findall("ENGINE/RUNNINGCONFIG/LINE")]
+    """The configuration to check: the running-config, or for an ASA its startup-config (all Packet Tracer 9 saves)."""
+    tag = "STARTUPCONFIG" if is_asa(dev) else "RUNNINGCONFIG"
+    return [(l.text or "").rstrip() for l in dev.findall(f"ENGINE/{tag}/LINE")]
 
 
 def pc_port(dev):
@@ -357,6 +366,8 @@ PKA_KINDS = {
     # itself, or "PARENT LINE" for an indented line (value keeps IOS's leading space); items are matched
     # by ID, so line order does not matter
     "run_line": (["IOS Configuration", "Running Configuration", "LINES"], "{value}", "{line_id}", "8", "Other"),
+    # an ASA's lines are graded in its startup-config (the only one Packet Tracer 9 saves): `write memory` counts
+    "start_line": (["IOS Configuration", "Startup Configuration", "LINES"], "{value}", "{line_id}", "8", "Other"),
     "vlan_name": (["VLANS", "{vlan}"], "VLAN Name", "VLAN Name", "5", "Switching"),
     "access_vlan": (["Ports", "{port}"], "Access VLAN", "Access VLAN", "5", "Switching"),
     "native_vlan": (["Ports", "{port}"], "Native VLAN", "Native VLAN", "5", "Switching"),
