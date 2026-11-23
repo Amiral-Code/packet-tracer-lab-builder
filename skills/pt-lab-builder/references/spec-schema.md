@@ -27,7 +27,16 @@ WIC-2T: `S0/0/0`, `S0/0/1`; `router-isr4321-serial` with NIM-2T: `S0/1/0`, `S0/1
 with NIM-2T: `S0/2/0`, `S0/2/1`). A serial port can only be cabled to another serial port. The link's **first**
 end (`a`) is the DCE that supplies the clock; `cable = "eSerialDTE"` makes `b` the DCE instead. Packet Tracer
 stores the link with no cable type and names the DCE end (`DCEDEV`/`DCEPORT`). Other cable values:
-`eStraightThrough`, `eCrossOver`, `eFiber` (chosen automatically when omitted).
+`eStraightThrough`, `eCrossOver`, `eFiber`, `eCoaxial`, `ePhoneLine` (chosen automatically when omitted).
+
+Home and provider devices: `home-router` (HomeRouter-PT-AC: `Internet`, `GigabitEthernet 1`-`4`), `wrt300n`
+(Linksys: `Internet`, `Ethernet 1`-`4`), `cable-modem` and `dsl-modem` (`Port 0` coax or phone line, `Port 1`
+Ethernet), `coax-splitter` (`Coaxial0`-`2`), `cloud` (stock Cloud-PT: `Serial0`-`3`, `Modem4`, `Modem5`,
+`Ethernet6`, `Coaxial7`), `central-office` and `cell-tower`. They take no `[config]` (no IOS): home routers start
+in Packet Tracer's stock state (Internet by DHCP, LAN 192.168.0.1 with DHCP from .100, SSID Default). A cloud
+maps its provider ports with `connect = [["Coaxial7", "Ethernet6"]]` (cable) or `[["Modem4", "Ethernet6"]]`
+(DSL). Coax and phone links are chosen automatically. Port names containing a space are written as Packet
+Tracer shows them, quoted in grade statements: `cable MODEM "Port 0" ISP-CLOUD Coaxial7`.
 
 Omit logical coordinates to use automatic site-by-site layout. Areas support cyan, yellow, green, pink, orange, purple, blue, grey, and red.
 

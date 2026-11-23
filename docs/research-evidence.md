@@ -226,3 +226,24 @@ clock-rate lines and all three pings are green. In the student's saved network t
 `CLOCKRATE` (128000, 128000, 64000) and the DTE ports `CLOCKRATE` 0 with no `clock rate` line, so the
 ` clock rate 2000000` seen on both ends in older files is a saved-configuration artefact, not live behaviour.
 On ISR routers `show controllers serial` needs the port number (`show controllers serial 0/1/0`).
+
+## Iteration 3: home and provider devices (2026-11-23)
+
+- Packet Tracer stores no port names for these devices; names come from links in the user's files and Packet
+  Tracer's samples: HomeRouter-PT-AC `Internet`, `GigabitEthernet 1`-`4`; Linksys-WRT300N `Internet`,
+  `Ethernet 1`-`4` (the library had listed `FastEthernet0`-`4`, which no link could use); Cable-Modem-PT and
+  DSL-Modem-PT `Port 0`/`Port 1`; CoAxialSplitter-PT `Coaxial0`-`2`; stock Cloud-PT `Serial0`-`3`, `Modem4`,
+  `Modem5`, `Ethernet6`, `Coaxial7`; Central-Office-Server `Backbone`, `Coaxial0/0`-`0/5`; Cell-Tower `Coaxial0`.
+- Coax and phone links have link `TYPE` `eCoaxial` / `ePhoneLine` and no cable `TYPE`. Copper links to home and
+  provider devices are straight-through in the samples (two user files use crossover to a modem).
+- A Cloud's cable/DSL mapping: `MODEM_CONNECTIONS/CONNECTION` (`PORT1` coax or modem port, `PORT2` Ethernet port)
+  and `MODEM_CONNECTION_TYPES/CONNECTION_TYPE` (`PORT` the Ethernet port, `DSL` true/false). Frame-relay style
+  sub-links live in `CONNECTIONS` (not used).
+- Home routers keep non-IOS settings in the engine (`INTERNET_CONNECTION_TYPE` 0 = DHCP, 2 = static,
+  `LAN_IP_ADDRESS`, `DHCP_SERVER/POOLS/POOL`, wireless `SSID`); the Internet port's `PORT_DHCP_ENABLE` is true
+  out of the box. Several source copies were author-modified (blank 0.0.0.0, static WAN, custom SSID), so only
+  stock-state copies are used as templates. No activity grades home-router settings, so none are graded yet.
+- `examples/home-cable-internet.toml`: 10/10 items (including Port Up on the home router, modem and cloud ports)
+  and 1/1 test kept by Packet Tracer's own save, 10/10 values identical to its own, cloud mapping, coax link and
+  stock home router intact in all three networks. Pending live check.
+

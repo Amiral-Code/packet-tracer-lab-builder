@@ -102,6 +102,26 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(ptlab.run_check({"cable": ("R1", "Serial0/0/0", "R2", "Serial0/0/1"),
                                           "cable_type": "eSerialDCE"}, {}, links))
 
+    def test_home_and_provider_ports_and_cables(self):
+        self.assertEqual(labgen.long_if("GigabitEthernet 1"), "GigabitEthernet 1")   # home router: a different port
+        self.assertEqual(labgen.long_if("Port 0"), "Port 0")
+        self.assertEqual(labgen.long_if("gi1/0/1"), "GigabitEthernet1/0/1")
+        self.assertEqual(labgen.words('cable MODEM "Port 0" CLOUD Coaxial7'), ["cable", "MODEM", "Port 0", "CLOUD", "Coaxial7"])
+        self.assertEqual(labgen.words("desc R1 G0/0 Bob's office"), ["desc", "R1", "G0/0", "Bob's", "office"])
+        self.assertEqual(labgen.cable_for("cable-modem", "cloud", "Port 0", "Coaxial7"), "eCoaxial")
+        self.assertEqual(labgen.cable_for("dsl-modem", "cloud", "Port 0", "Modem4"), "ePhoneLine")
+        self.assertEqual(labgen.cable_for("home-router", "cable-modem", "Internet", "Port 1"), "eStraightThrough")
+        self.assertEqual(labgen.cable_for("pc", "home-router", "FastEthernet0", "GigabitEthernet 1"), "eStraightThrough")
+        self.assertEqual(labgen.cable_for("pc", "router-2911", "FastEthernet0", "GigabitEthernet0/0"), "eCrossOver")
+
+    def test_cloud_connections_are_written_like_packet_tracer(self):
+        from pt_lab_builder import ptbuild
+        cloud = ET.fromstring("<DEVICE><ENGINE><MODEM_CONNECTIONS><CONNECTION/></MODEM_CONNECTIONS></ENGINE></DEVICE>")
+        ptbuild.cloud_connections(cloud, [("Coaxial7", "Ethernet6"), ("Modem4", "Ethernet6")])
+        self.assertEqual([(c.findtext("PORT1"), c.findtext("PORT2")) for c in cloud.iter("CONNECTION")],
+                         [("Coaxial7", "Ethernet6"), ("Modem4", "Ethernet6")])
+        self.assertEqual([c.findtext("DSL") for c in cloud.iter("CONNECTION_TYPE")], ["false", "true"])
+
     def test_data_directory_override(self):
         with tempfile.TemporaryDirectory() as directory:
             old = os.environ.get("PTLAB_DATA_DIR")
@@ -127,6 +147,7 @@ class CoreTests(unittest.TestCase):
             devices.mkdir()
             root = ET.Element("DEVICE")
             engine = ET.SubElement(root, "ENGINE")
+            ET.SubElement(engine, "TYPE", {"model": "2911"}).text = "Router"
             config = ET.SubElement(engine, "RUNNINGCONFIG")
             for line in ("version 15.1", "interface GigabitEthernet0/0", " no ip address", " shutdown", "end"):
                 ET.SubElement(config, "LINE").text = line

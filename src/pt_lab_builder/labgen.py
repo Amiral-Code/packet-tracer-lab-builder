@@ -38,7 +38,11 @@ def die(msg):
 
 
 def long_if(name):
-    """G0/0 -> GigabitEthernet0/0, fa0/1 -> FastEthernet0/1 (already long names pass through)."""
+    """G0/0 -> GigabitEthernet0/0, fa0/1 -> FastEthernet0/1 (already long names pass through).
+    Packet Tracer's names with a space before a plain number (home router "GigabitEthernet 1", modem "Port 0",
+    Linksys "Ethernet 1") are kept exactly: they are different ports from "GigabitEthernet1"."""
+    if re.match(r"[A-Za-z-]+ \d+$", name.strip()):
+        return name.strip()
     m = re.match(r"([A-Za-z-]+)\s*([\d/.:]+)$", name.strip())
     if not m:
         return name
@@ -307,9 +311,37 @@ def ptbuild_model_is_host(model):
     return model in ("pc", "server", "laptop", "printer", "tablet", "smartphone")
 
 
+IOS_TYPES = ("Router", "Switch", "MultiLayerSwitch")
+# home and provider gear: always a straight-through copper cable (as in the user's files and Packet Tracer's samples)
+HOME_MODELS = ("home-router", "wrt300n", "cable-modem", "dsl-modem", "cloud", "central-office")
+
+
+def port_medium(model, port):
+    """'serial', 'coax', 'phone' or 'copper' for one port of a library model."""
+    if port.startswith("Serial"):
+        return "serial"
+    if port.startswith("Coaxial") or (model == "cable-modem" and port == "Port 0"):
+        return "coax"
+    if port.startswith("Modem") or (model == "dsl-modem" and port == "Port 0"):
+        return "phone"
+    return "copper"
+
+
+def words(statement):
+    """Split a grade statement. A port whose name contains a space is quoted: cable MODEM "Port 0" CLOUD Coaxial7."""
+    return shlex.split(statement) if '"' in statement else statement.split()
+
+
 def cable_for(ma, mb, pa, pb):
-    if pa.startswith("Serial") or pb.startswith("Serial"):
+    media = {port_medium(ma, pa), port_medium(mb, pb)}
+    if "serial" in media:
         return "eSerialDCE"
+    if "coax" in media:
+        return "eCoaxial"
+    if "phone" in media:
+        return "ePhoneLine"
+    if ma in HOME_MODELS or mb in HOME_MODELS:
+        return "eStraightThrough"
     host = ("pc", "server", "laptop", "printer", "ipphone-7960", "ap")
     cls = lambda m: "host" if m in host else "router" if m.startswith("router") else "switch"
     a, b = cls(ma), cls(mb)
@@ -398,6 +430,8 @@ def build_topology(spec, configs, pcs, which="answer"):
     for d in spec["device"]:
         t.add(d["model"], d["name"], d["x"], d["y"], d.get("physical"), site=site_of.get(d["name"]))
         models[d["name"]] = d["model"]
+        if d.get("connect"):   # a Cloud's cable/DSL mapping: [["Coaxial7", "Ethernet6"], ["Modem4", ...]]
+            ptbuild.cloud_connections(t.devices[d["name"]], [tuple(p) for p in d["connect"]])
     cidr = {(r[0], long_if(r[1])): r[2] for r in addressing_rows(spec)}
     for lk in spec.get("link", []):
         if which == "start" and lk.get("student"):
@@ -445,9 +479,11 @@ def configs_for(spec, which):
     out = {}
     tpl_cfg = {}
     for d in spec["device"]:
-        if ptbuild_model_is_host(d["model"]) or d["model"] in ("ipphone-7960", "cloud", "hub", "ap"):
+        if ptbuild_model_is_host(d["model"]):
             continue
         tpl = ET.parse(library_dir() / "devices" / (d["model"] + ".xml")).getroot()
+        if tpl.findtext("ENGINE/TYPE") not in IOS_TYPES:   # home routers, modems, clouds, WLCs: no IOS
+            continue
         tpl_cfg[d["name"]] = [l.text or "" for l in tpl.findall("ENGINE/RUNNINGCONFIG/LINE")]
     cfg = spec.get("config", {})
     kind = spec["lab"].get("kind", "configure")
@@ -604,7 +640,7 @@ def connectivity_tests(spec):
     tests = []
     points = spec.get("grade", {}).get("points", {})
     for st in spec.get("grade", {}).get("items", []):
-        w = st.split()
+        w = words(st)
         if w[0] not in CONNECTIVITY_STATEMENTS:
             continue
         kind = w[0]
@@ -644,7 +680,7 @@ def compile_grade(spec):
     overrides = spec.get("grade", {}).get("hints", {})
     points = spec.get("grade", {}).get("points", {})
     for st in spec.get("grade", {}).get("items", []):
-        w = st.split()
+        w = words(st)
         k = w[0]
         first = len(items)
         try:
@@ -658,7 +694,7 @@ def compile_grade(spec):
                 else:
                     it.setdefault("hint", default_hint(w, it))
     graded = {frozenset({(w[1], long_if(w[2])), (w[3], long_if(w[4]))})
-              for w in (st.split() for st in spec.get("grade", {}).get("items", [])) if w[0] == "cable"}
+              for w in (words(st) for st in spec.get("grade", {}).get("items", [])) if w[0] == "cable"}
     for lk in spec.get("link", []):          # every cable the student must add is graded
         if lk.get("student"):
             (na, pa), (nb, pb) = lk["a"].split(None, 1), lk["b"].split(None, 1)

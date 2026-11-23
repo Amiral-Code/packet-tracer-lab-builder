@@ -195,10 +195,31 @@ def link(root, dev_a, port_a, dev_b, port_b, cable="eStraightThrough", kind="eCo
         dce_dev, dce_port = (dev_a, port_a) if cable == "eSerialDCE" else (dev_b, port_b)
         ET.SubElement(c, "DCEDEV").text = dce_dev.findtext("ENGINE/SAVE_REF_ID")
         ET.SubElement(c, "DCEPORT").text = dce_port
+    elif kind in ("eCoaxial", "ePhoneLine"):     # stored like serial: the link TYPE only, no cable TYPE
+        if c.find("TYPE") is not None:
+            c.remove(c.find("TYPE"))
     elif c.find("TYPE") is not None:
         c.find("TYPE").text = cable
     root.find("NETWORK/LINKS").append(lk)
     return lk
+
+
+def cloud_connections(device, pairs):
+    """A Cloud's cable/DSL mapping, as Packet Tracer stores it: MODEM_CONNECTIONS pairs a coax or modem (phone) port
+    with an Ethernet port; MODEM_CONNECTION_TYPES marks that Ethernet port as DSL (true) or cable (false)."""
+    eng = device.find("ENGINE")
+    holders = {}
+    for tag in ("MODEM_CONNECTION_TYPES", "MODEM_CONNECTIONS"):
+        holders[tag] = eng.find(tag) if eng.find(tag) is not None else ET.SubElement(eng, tag)
+        for c in list(holders[tag]):
+            holders[tag].remove(c)
+    for line_port, eth in pairs:
+        ct = ET.SubElement(holders["MODEM_CONNECTION_TYPES"], "CONNECTION_TYPE")
+        ET.SubElement(ct, "PORT").text = eth
+        ET.SubElement(ct, "DSL").text = "true" if line_port.startswith("Modem") else "false"
+        c = ET.SubElement(holders["MODEM_CONNECTIONS"], "CONNECTION")
+        ET.SubElement(c, "PORT1").text = line_port
+        ET.SubElement(c, "PORT2").text = eth
 
 
 # ---------------------------------------------------------------- whole topologies
@@ -363,7 +384,8 @@ class Topology:
                 raise ValueError(f"{dev} has no port {port}; it has: {', '.join(self.ports(dev))}")
         if self._link_tpl is None:
             self._link_tpl = ET.fromstring(LINK_TEMPLATE)
-        kind = "eSerial" if cable in ("eSerialDCE", "eSerialDTE") else ("eFiber" if cable == "eFiber" else "eCopper")
+        kind = {"eSerialDCE": "eSerial", "eSerialDTE": "eSerial", "eFiber": "eFiber", "eCoaxial": "eCoaxial",
+                "ePhoneLine": "ePhoneLine"}.get(cable, "eCopper")
         return link(self.root, self.devices[a] if isinstance(a, str) else a, port_a,
                     self.devices[b] if isinstance(b, str) else b, port_b, cable=cable, kind=kind, like=self._link_tpl)
 

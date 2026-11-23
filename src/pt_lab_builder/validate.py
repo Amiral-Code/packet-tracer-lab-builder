@@ -62,7 +62,7 @@ def _base_rack_reserved():
     return []
 
 
-CABLES = ("eStraightThrough", "eCrossOver", "eFiber", "eSerialDCE", "eSerialDTE")
+CABLES = ("eStraightThrough", "eCrossOver", "eFiber", "eSerialDCE", "eSerialDTE", "eCoaxial", "ePhoneLine")
 
 
 def _port_ok(ports, iface):
@@ -153,6 +153,31 @@ def lint(spec) -> Issues:
             issues.error(f"{where}: {dev} has no port {port} (it has {', '.join(ports[dev]) or 'none'})")
         return dev, port
 
+    # a Cloud's cable/DSL mapping: [coax or modem port, Ethernet port] pairs on the cloud's own ports
+    for d in spec.get("device", []):
+        if "connect" not in d or d.get("name") not in model:
+            continue
+        name = d["name"]
+        if model[name] != "cloud":
+            issues.error(f"{name}: 'connect' maps a Cloud's ports; {model[name]} is not a cloud")
+            continue
+        used_ports = set()
+        for pair in d["connect"]:
+            if not isinstance(pair, list) or len(pair) != 2:
+                issues.error(f"{name}: connect entries are [\"Coaxial7\", \"Ethernet6\"] pairs")
+                continue
+            line_port, eth = pair
+            for port in pair:
+                if port not in ports[name]:
+                    issues.error(f"{name}: connect: no port {port} (it has {', '.join(ports[name])})")
+                elif port in used_ports:
+                    issues.error(f"{name}: connect: {port} is mapped twice")
+                used_ports.add(port)
+            if not line_port.startswith(("Coaxial", "Modem")):
+                issues.error(f"{name}: connect {pair}: the first port is the coax (cable) or Modem (DSL) port")
+            if eth.startswith(("Coaxial", "Modem", "Serial")):
+                issues.error(f"{name}: connect {pair}: the second port is the Ethernet port towards the provider")
+
     # links: ports exist, none used twice
     used = {}
     cabled = set()
@@ -167,7 +192,15 @@ def lint(spec) -> Issues:
         cable = lk.get("cable")
         if cable is not None and cable not in CABLES:
             issues.error(f"link {i}: cable {cable!r} is not one of {', '.join(CABLES)}")
-        serial = [labgen.long_if((lk.get(side, "").split(None, 1) + [""])[1]).startswith("Serial") for side in "ab"]
+        ends = [(lk.get(side, "").split(None, 1) + [""])[:2] for side in "ab"]
+        media = [labgen.port_medium(model.get(n, ""), labgen.long_if(p)) for n, p in ends]
+        if media[0] != media[1] and "serial" not in media:
+            issues.error(f"link {i}: {ends[0][0]} {ends[0][1]} is a {media[0]} port but {ends[1][0]} {ends[1][1]} "
+                         f"is a {media[1]} port")
+        elif media[0] in ("coax", "phone") and cable not in (None, {"coax": "eCoaxial", "phone": "ePhoneLine"}[media[0]]):
+            issues.error(f"link {i}: a {media[0]} link takes cable = "
+                         f"\"{ {'coax': 'eCoaxial', 'phone': 'ePhoneLine'}[media[0]] }\" (or none)")
+        serial = [m == "serial" for m in media]
         if any(serial) and not all(serial):
             issues.error(f"link {i}: a serial port can only be cabled to another serial port")
         elif all(serial) and cable not in (None, "eSerialDCE", "eSerialDTE"):
@@ -275,8 +308,8 @@ def lint(spec) -> Issues:
             nets.append((n, dev, iface))
             if not iface.startswith(NON_PHYSICAL) and "." not in iface and (dev, iface) not in cabled:
                 issues.warn(f"addressing: {dev} {row[1]} has an address but no cable")
-    virtual = {st.split()[4] for st in spec.get("grade", {}).get("items", []) if st.split()[:1] == ["hsrp"]
-               and len(st.split()) > 4}
+    virtual = {labgen.words(st)[4] for st in spec.get("grade", {}).get("items", [])
+               if labgen.words(st)[:1] == ["hsrp"] and len(labgen.words(st)) > 4}
     for row in labgen.addressing_rows(spec):
         if len(row) < 4 or not row[3] or row[0] not in model or not row[2] or row[2].lower() == "dhcp":
             continue
@@ -317,7 +350,7 @@ def lint(spec) -> Issues:
         first4, first6 = {}, {}
     first_addr, first_addr6 = set(first4), set(first6)
     for st in statements:
-        w = st.split()
+        w = labgen.words(st)
         if not w or w[0] not in labgen.GRADE_STATEMENTS:
             issues.error(f"grade: unknown statement {st!r} (known: {', '.join(labgen.GRADE_STATEMENTS)})")
             continue
@@ -342,7 +375,7 @@ def lint(spec) -> Issues:
                 issues.warn(f"grade: {st!r} differs from the addressing table ({table[(w[1], iface)]})")
 
     # balance: configuration items say what was typed, outcome tests say whether it works; a lab needs both
-    kinds = [st.split()[0] for st in statements if st.split()]
+    kinds = [labgen.words(st)[0] for st in statements if st.split()]
     outcome = [k for k in kinds if k in labgen.CONNECTIVITY_STATEMENTS]
     config = [k for k in kinds if k not in labgen.CONNECTIVITY_STATEMENTS and k not in ("up", "cable")]
     if statements and not outcome:

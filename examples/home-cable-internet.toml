@@ -1,0 +1,162 @@
+[lab]
+id = "home-cable-internet"
+title = "First Day Online: A Home on Cable Internet"
+level = 1
+kind = "configure"
+exam = "CCNA 1.2 / 1.3 / 4.3 - SOHO networks, cabling, DHCP"
+time = 25
+scenario = """
+A family has just signed up with Atlas Cable. The technician left a cable modem and a home router on the desk,
+and the provider's side is half set up: its access router has an address but does not hand out customer
+addresses yet.
+
+Cable the home to the provider, then finish the provider's DHCP service so the home router gets its Internet
+address and the family PC reaches the provider's web server.
+"""
+objectives = [
+  "Identify SOHO devices: home router, cable modem, and the provider's cable network",
+  "Choose coaxial and copper cables and the right ports on a home router and a cable modem",
+  "Configure a DHCPv4 pool on a provider router for customer routers",
+  "Verify Internet reachability from a host behind a home router (NAT)",
+]
+
+[[device]]
+name = "HOME-PC"
+model = "pc"
+x = 80
+y = 320
+physical = "building"
+[[device]]
+name = "HOME-RTR"
+model = "home-router"
+x = 240
+y = 320
+physical = "building"
+[[device]]
+name = "MODEM"
+model = "cable-modem"
+x = 400
+y = 320
+physical = "building"
+[[device]]
+name = "ATLAS-CABLE"
+model = "cloud"
+x = 560
+y = 200
+connect = [["Coaxial7", "Ethernet6"]]
+[[device]]
+name = "ISP-R"
+model = "router-2911"
+x = 720
+y = 200
+[[device]]
+name = "ISP-WEB"
+model = "server"
+x = 860
+y = 320
+
+[[link]]
+a = "HOME-PC Fa0"
+b = "HOME-RTR GigabitEthernet 1"
+student = true
+[[link]]
+a = "HOME-RTR Internet"
+b = "MODEM Port 1"
+student = true
+[[link]]
+a = "MODEM Port 0"
+b = "ATLAS-CABLE Coaxial7"
+student = true
+[[link]]
+a = "ATLAS-CABLE Ethernet6"
+b = "ISP-R G0/0"
+[[link]]
+a = "ISP-R G0/1"
+b = "ISP-WEB Fa0"
+
+[[area]]
+label = "HOME  -  192.168.0.0/24 (home router DHCP + NAT)"
+color = "yellow"
+devices = ["HOME-PC", "HOME-RTR", "MODEM"]
+[[area]]
+label = "ATLAS CABLE  -  customers 198.51.100.0/24, servers 203.0.113.0/24"
+color = "blue"
+devices = ["ATLAS-CABLE", "ISP-R", "ISP-WEB"]
+
+[addressing]
+rows = [
+  ["HOME-PC", "Fa0",  "dhcp",             ""],
+  ["ISP-R",   "G0/0", "198.51.100.1/24",  ""],
+  ["ISP-R",   "G0/1", "203.0.113.1/24",   ""],
+  ["ISP-WEB", "Fa0",  "203.0.113.10/24",  "203.0.113.1"],
+]
+
+[config]
+unconfigured_hosts = ["HOME-PC"]
+
+[config.start]
+ISP-R = """
+interface G0/0
+ ip address 198.51.100.1 255.255.255.0
+ no shutdown
+interface G0/1
+ ip address 203.0.113.1 255.255.255.0
+ no shutdown
+"""
+
+[config.answer]
+ISP-R = """
+interface G0/0
+ ip address 198.51.100.1 255.255.255.0
+ no shutdown
+interface G0/1
+ ip address 203.0.113.1 255.255.255.0
+ no shutdown
+ip dhcp excluded-address 198.51.100.1 198.51.100.9
+ip dhcp pool CUSTOMERS
+ network 198.51.100.0 255.255.255.0
+ default-router 198.51.100.1
+ dns-server 203.0.113.10
+"""
+
+[[part]]
+title = "Cable the home"
+intro = "Three cables, two kinds. The provider's cable network ends at the coaxial socket in the wall: here, the ATLAS-CABLE cloud."
+steps = [
+  "HOME-PC to **HOME-RTR GigabitEthernet 1** with a copper straight-through cable.",
+  "HOME-RTR **Internet** port to MODEM **Port 1** with a copper straight-through cable.",
+  "MODEM **Port 0** to ATLAS-CABLE **Coaxial7** with a **coaxial** cable.",
+]
+hint = "The home router's LAN ports and its Internet port look alike: the Internet port is the one that faces the modem."
+why = "A cable modem converts between the provider's coaxial network and Ethernet; the home router never sees the coax."
+
+[[part]]
+title = "Finish the provider's DHCP"
+intro = "Customer routers get their Internet address by DHCP from ISP-R."
+steps = [
+  "On **ISP-R**, exclude 198.51.100.1 to 198.51.100.9 and create pool **CUSTOMERS** for 198.51.100.0/24 with default router 198.51.100.1 and DNS server 203.0.113.10.",
+  "On **HOME-PC**, set IP configuration to **DHCP**: it gets a 192.168.0.x address from the home router.",
+  "Check: on ISP-R `show ip dhcp binding` lists the home router; HOME-PC pings 203.0.113.10 and opens http://203.0.113.10.",
+]
+hint = "The home router asks for an address only once its Internet port has a working path to ISP-R; re-cabling or a minute's wait triggers a new request."
+why = "Two DHCP servers are at work: the provider addresses the home router, and the home router addresses the home. NAT on the home router joins the two."
+
+[grade]
+items = [
+  'cable HOME-PC Fa0 HOME-RTR "GigabitEthernet 1"',
+  'cable HOME-RTR Internet MODEM "Port 1"',
+  'cable MODEM "Port 0" ATLAS-CABLE Coaxial7',
+  "pool ISP-R CUSTOMERS 198.51.100.0/24 gw 198.51.100.1 dns 203.0.113.10",
+  "dhcp HOME-PC",
+  "ping HOME-PC ISP-WEB",
+]
+
+debrief = """
+A home connection has two halves. The provider's half is everything up to the coaxial socket: the cable
+network and its access router. The customer's half is the modem, which only converts media, and the home
+router, which is router, switch, wireless access point, DHCP server and NAT gateway in one box.
+"""
+questions = [
+  "Which device gives HOME-PC its address, and which gives the home router its address?",
+  "What address does ISP-WEB see as the source of HOME-PC's ping, and why?",
+]

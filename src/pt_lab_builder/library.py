@@ -25,7 +25,26 @@ WANT = {  # (TYPE, model) -> library key
     ("WirelessLanController", "WLC-3504"): "wlc-3504", ("WirelessLanController", "WLC-2504"): "wlc-2504",
     ("WirelessRouter", "Linksys-WRT300N"): "wrt300n", ("TabletPC", "TabletPC-PT"): "tablet",
     ("Pda", "SMARTPHONE-PT"): "smartphone",
+    ("WirelessRouterNewGeneration", "HomeRouter-PT-AC"): "home-router",
+    ("CableModem", "Cable-Modem-PT"): "cable-modem", ("DslModem", "DSL-Modem-PT"): "dsl-modem",
+    ("CoAxialSplitter", "CoAxialSplitter-PT"): "coax-splitter",
+    ("CentralOfficeServer", "Central-Office-Server"): "central-office", ("CellTower", "Cell-Tower"): "cell-tower",
 }
+# Packet Tracer stores no port names: it derives them per model. Names for devices without an IOS
+# configuration, as they appear on links in real files (the user's activities and Packet Tracer's samples).
+PORT_NAMES = {
+    "Linksys-WRT300N": ["Internet", "Ethernet 1", "Ethernet 2", "Ethernet 3", "Ethernet 4"],
+    "HomeRouter-PT-AC": ["Internet", "GigabitEthernet 1", "GigabitEthernet 2", "GigabitEthernet 3",
+                         "GigabitEthernet 4"],
+    "Cable-Modem-PT": ["Port 0", "Port 1"],        # Port 0 coax, Port 1 Ethernet
+    "DSL-Modem-PT": ["Port 0", "Port 1"],          # Port 0 phone line, Port 1 Ethernet
+    "CoAxialSplitter-PT": ["Coaxial0", "Coaxial1", "Coaxial2"],
+    "Cloud-PT": ["Serial0", "Serial1", "Serial2", "Serial3", "Modem4", "Modem5", "Ethernet6", "Coaxial7"],
+    "Central-Office-Server": ["Backbone", "Coaxial0/0", "Coaxial0/1", "Coaxial0/2", "Coaxial0/3", "Coaxial0/4",
+                              "Coaxial0/5"],
+    "Cell-Tower": ["Coaxial0"],
+}
+IOS_TYPES = ("Router", "Switch", "MultiLayerSwitch")
 # Routers with interface cards already fitted, taken whole from the user's own files: Packet Tracer stores a card as
 # a MODULE in the router's slot tree with its own ports, so copying a real fitted router keeps that tree exactly.
 # (TYPE, model, sorted card models) -> library key. Plain WANT keys only take routers with no card fitted.
@@ -60,6 +79,20 @@ def pt_modules(device):
                         and not m.findtext("MODEL").endswith("-COVER")))
 
 
+HOME_ROUTER_TYPES = ("WirelessRouter", "WirelessRouterNewGeneration")
+
+
+def stock_home_router(device):
+    """Packet Tracer's out-of-the-box home router: Internet by DHCP (type 0), LAN 192.168.0.1, DHCP pool from .100.
+    Copies changed by an activity's author (blank or static addresses) are not usable as a template."""
+    e = device.find("ENGINE")
+    internet = next((p for p in device.iter("PORT") if p.find("PORT_DHCP_ENABLE") is not None), None)
+    ssids = {s.text for w in device.iter("WIRELESS_SERVER") for s in w.iter("SSID")}
+    return (e.findtext("INTERNET_CONNECTION_TYPE") == "0" and e.findtext("LAN_IP_ADDRESS") == "192.168.0.1"
+            and e.findtext("DHCP_SERVER/POOLS/POOL/START_IP") == "192.168.0.100"
+            and internet is not None and internet.findtext("PORT_DHCP_ENABLE") == "true" and ssids <= {"Default"})
+
+
 def library_key(device):
     t = device.find("ENGINE/TYPE")
     if t is None:
@@ -69,6 +102,8 @@ def library_key(device):
         return VARIANTS.get((t.text, t.get("model"), cards))
     stock = STOCK_PT_MODULES.get(t.get("model"))
     if stock is not None and pt_modules(device) != stock:
+        return None
+    if t.text in HOME_ROUTER_TYPES and not stock_home_router(device):
         return None
     return WANT.get((t.text, t.get("model")))
 
@@ -152,6 +187,8 @@ def factory_reset(device, kind):
             for v in list(vl):
                 if v.get("number") not in DEFAULT_VLANS:
                     vl.remove(v)
+    if kind == "home":                               # keep the stock settings (Internet port is a DHCP client)
+        return eng
     for p in device.iter("PORT"):                    # saved addresses and descriptions on every port and host
         for tag in ("IP", "SUBNET", "PORT_GATEWAY", "PORT_DNS", "DESCRIPTION"):
             if p.find(tag) is not None:
@@ -160,6 +197,10 @@ def factory_reset(device, kind):
             p.find("PORT_DHCP_ENABLE").text = "false"
     if eng.find("GATEWAY") is not None:
         eng.find("GATEWAY").text = ""
+    for tag in ("MODEM_CONNECTION_TYPES", "MODEM_CONNECTIONS", "PHONE_CONNECTIONS", "CONNECTIONS"):
+        if eng.find(tag) is not None:            # a Cloud's mappings from its source file
+            for c in list(eng.find(tag)):
+                eng.find(tag).remove(c)
     return eng
 
 
@@ -254,6 +295,9 @@ def build(sources, destination=None):
         d = device
         ifaces = [l.text.split(None, 1)[1] for l in d.findall("ENGINE/RUNNINGCONFIG/LINE")
                   if l.text and l.text.startswith("interface ")]
+        model = d.find("ENGINE/TYPE").get("model")
+        if not ifaces and model in PORT_NAMES:
+            ifaces = list(PORT_NAMES[model])
         if not ifaces:  # hosts have no IOS config: name the ports from their card types
             names = {"eCopperFastEthernet": "FastEthernet", "eCopperGigabitEthernet": "GigabitEthernet",
                      "eHostWirelessG": "Wireless", "eHostWirelessN": "Wireless", "eHostWirelessAC": "Wireless",
@@ -266,10 +310,12 @@ def build(sources, destination=None):
                     count[stem] = count.get(stem, 0) + 1
         strip_user_apps(d)
         ty = d.find("ENGINE/TYPE").text
-        factory_reset(d, "router" if ty == "Router" else "switch" if ty in ("Switch", "MultiLayerSwitch") else "host")
+        factory_reset(d, "router" if ty == "Router" else "switch" if ty in ("Switch", "MultiLayerSwitch")
+                      else "home" if ty in HOME_ROUTER_TYPES else "host")
         ET.ElementTree(d).write(devices_out / (key + ".xml"), encoding="utf-8")
         ifaces = [i for i in ifaces if "." not in i and (not i.startswith("Vlan") or i == "Vlan1")]
         index[key] = {"type": d.find("ENGINE/TYPE").text, "model": d.find("ENGINE/TYPE").get("model"),
+                      "ios": d.find("ENGINE/TYPE").text in IOS_TYPES,
                       "version": version, "source": label, "file": filename.name, "interfaces": ifaces}
         print(f"{key:18} {index[key]['model']:16} {version:12} {label:22} {len(ifaces)} interfaces")
     with open(devices_out / "index.json", "w", encoding="utf-8") as fh:

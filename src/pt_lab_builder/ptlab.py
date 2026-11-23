@@ -207,6 +207,8 @@ def cables(tree):
             ends = frozenset({(names.get(c.findtext("FROM")), ports[0]), (names.get(c.findtext("TO")), ports[1])})
             if c.findtext("DCEDEV"):   # serial: no cable TYPE, the DCE end is named instead
                 out[ends] = ("eSerial", names.get(c.findtext("DCEDEV")), c.findtext("DCEPORT"))
+            elif lk.findtext("TYPE") in ("eCoaxial", "ePhoneLine"):
+                out[ends] = lk.findtext("TYPE")
             else:
                 out[ends] = c.findall("TYPE")[-1].text if c.findall("TYPE") else None
     return out
