@@ -191,6 +191,12 @@ UDP connectivity tests (2026-11-23):
 
   Inference: the empty-payload PDU counts as delivered at a closed port, and as failed when a service consumes and
   rejects it. UDP tests are therefore used for delivery and filtering only.
+- Filtering confirmed live on `udp-acl-probe.pka` (PC1 -> R1 -> SRV1): without the ACL, `udp ... 5555 fail` was
+  red (2/3); after `access-list 100 deny udp any any eq 5555` / `permit ip any any` inbound on G0/0, ping,
+  UDP/5556 (should pass) and UDP/5555 (should fail) were all correct (3/3).
+- Corroboration: none of the 310 connectivity tests in the 93 decoded activities is UDP (ICMP, ICMPv6 and TCP
+  only); Packet Tracer's help says a Complex PDU's application choice only sets its ports. No public source
+  describes UDP test outcomes.
 
 Still open: whether Check Results compares the stored value or the answer network's value for non-pattern items.
 They are identical for every generated item, so it does not affect grading.

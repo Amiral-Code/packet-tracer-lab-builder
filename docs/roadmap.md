@@ -79,7 +79,8 @@ Live-confirmed 2026-11-23 (`feature-probe-2.pka`, Check Results **40/40**, Conne
 - ~~**UDP tests**~~ `udp SRC DST PORT [fail]`, copied from a Complex PDU the user saved (type 2, `CUdpHeader`).
   Live probe (`udp-probe.pka`): UDP to a port with no service passes, UDP to an unreachable host fails as expected,
   but UDP to a listening service fails (DNS on: UDP/53 pass -> fail; TFTP/69 always fails). So there is no `dns`
-  test: lint refuses UDP to service ports. Grading a DNS server needs its records as assessment items, which waits
+  test: lint refuses UDP to service ports. ACL filtering confirmed live (`udp-acl-probe.pka`: `fail` test red
+  without the ACL, 3/3 with it). Grading a DNS server needs its records as assessment items, which waits
   for a real file that grades them.
 
 ## Iteration 3: devices and modules
