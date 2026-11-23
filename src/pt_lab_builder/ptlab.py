@@ -58,21 +58,14 @@ def devices(tree):
     return out
 
 
-def is_asa(dev):
-    return dev.findtext("ENGINE/TYPE") == "ASA"
-
-
 def set_config(dev, text):
-    """Replace the running-config of a router/switch. Packet Tracer re-parses it on load.
-    An ASA boots from its startup-config: Packet Tracer 9 saves no ASA running-config and rebuilds it at boot,
-    so an ASA gets the same text as its startup-config too."""
+    """Replace the running-config of a router/switch/ASA. Packet Tracer re-parses it on load (a powered-on device)."""
     eng = dev.find("ENGINE")
-    for tag in (("RUNNINGCONFIG", "STARTUPCONFIG") if is_asa(dev) else ("RUNNINGCONFIG",)):
-        rc = eng.find(tag) if eng.find(tag) is not None else ET.SubElement(eng, tag)
-        for line in list(rc):
-            rc.remove(line)
-        for line in text.strip("\n").splitlines():
-            ET.SubElement(rc, "LINE").text = line.rstrip()
+    rc = eng.find("RUNNINGCONFIG")
+    for line in list(rc):
+        rc.remove(line)
+    for line in text.strip("\n").splitlines():
+        ET.SubElement(rc, "LINE").text = line.rstrip()
     sync_vlans(eng, text)
 
 
@@ -125,9 +118,7 @@ def set_sdm_template(dev, template):
 
 
 def get_config(dev):
-    """The configuration to check: the running-config, or for an ASA its startup-config (all Packet Tracer 9 saves)."""
-    tag = "STARTUPCONFIG" if is_asa(dev) else "RUNNINGCONFIG"
-    return [(l.text or "").rstrip() for l in dev.findall(f"ENGINE/{tag}/LINE")]
+    return [(l.text or "").rstrip() for l in dev.findall("ENGINE/RUNNINGCONFIG/LINE")]
 
 
 def pc_port(dev):
@@ -366,8 +357,6 @@ PKA_KINDS = {
     # itself, or "PARENT LINE" for an indented line (value keeps IOS's leading space); items are matched
     # by ID, so line order does not matter
     "run_line": (["IOS Configuration", "Running Configuration", "LINES"], "{value}", "{line_id}", "8", "Other"),
-    # an ASA's lines are graded in its startup-config (the only one Packet Tracer 9 saves): `write memory` counts
-    "start_line": (["IOS Configuration", "Startup Configuration", "LINES"], "{value}", "{line_id}", "8", "Other"),
     "vlan_name": (["VLANS", "{vlan}"], "VLAN Name", "VLAN Name", "5", "Switching"),
     "access_vlan": (["Ports", "{port}"], "Access VLAN", "Access VLAN", "5", "Switching"),
     "native_vlan": (["Ports", "{port}"], "Native VLAN", "Native VLAN", "5", "Switching"),
@@ -389,6 +378,11 @@ PKA_KINDS = {
     "enable_secret": ([], "Enable Secret", "Enable Secret", "8", "Other"),       # value: md5crypt, salt mERr
     "username": (["User Names"], "Username", "{user}", "8", "Other"),            # value: "NAME HASH"
     "pool_name": (["DHCP Server", "Pools", "{pool}"], "Name", "Name", "0", "Ip"),
+    # ASA, as in Packet Tracer's own assessment tree for a 5506-X (value strings keep their leading space)
+    "nameif": (["Ports", "{port}"], "NameIf", "NameIf", "8", "Other"),
+    "seclevel": (["Ports", "{port}"], "Security Level", "Security Level", "8", "Other"),
+    "asa_obj_addr": (["Asa Object List", "{obj}"], "Address", "Address", "8", "Other"),       # " subnet A M"
+    "asa_obj_nat": (["Asa Object List", "{obj}"], "Nat", "Nat", "8", "Other"),               # " nat (in,out) ..."
     "pool_start": (["DHCP Server", "Pools", "{pool}"], "Start IP address", "Start IP address", "0", "Ip"),
     "pool_mask": (["DHCP Server", "Pools", "{pool}"], "Subnet mask", "Subnet mask", "0", "Ip"),
     "pool_gw": (["DHCP Server", "Pools", "{pool}"], "Default Gateway", "Default Gateway", "0", "Ip"),

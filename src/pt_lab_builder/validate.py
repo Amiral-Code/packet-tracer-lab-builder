@@ -403,7 +403,7 @@ def _statement_problem(w, st, model, ports, first_addr, first_addr6=()):
     k = w[0]
     need = {"ip": 5 if len(w) > 3 and w[3] == "in" else 4, "ip6": 4, "up": 3, "gw": 3, "gw6": 3, "hostname": 3,
             "dhcp": 2, "vlan": 4, "access": 4, "route": 4, "route6": 4, "ospf": 5, "rid": 4, "passive": 4, "stp": 4, "clock": 4,
-            "portfast": 3, "nat": 4, "acl": 5, "cable": 5}
+            "portfast": 3, "nat": 4, "acl": 5, "cable": 5, "nameif": 4, "seclevel": 4}
     if k in need and len(w) != need[k]:
         return f"expects {need[k] - 1} fields after '{k}'"
     host = labgen.ptbuild_model_is_host(model.get(w[1], ""))
@@ -412,6 +412,12 @@ def _statement_problem(w, st, model, ports, first_addr, first_addr6=()):
                 "clock")
     if host and k in ios_only:
         return f"{w[1]} is a host; '{k}' grades IOS configuration"
+    if k in ("nameif", "seclevel", "object") and not str(model.get(w[1], "")).startswith("asa-"):
+        return f"'{k}' grades an ASA; {w[1]} is {model.get(w[1])}"
+    if str(model.get(w[1], "")).startswith("asa-") and k in ("line", "in", "route", "ospf", "rid", "passive", "desc",
+                                                              "banner", "hostname"):
+        return (f"{w[1]} is an ASA: Packet Tracer has no running-config line items for it; grade it with nameif, "
+                f"seclevel, ip, acl, object and connectivity tests")
     if not host and k in ("gw", "gw6", "dhcp"):
         return f"{w[1]} is not a host; '{k}' grades a PC/server setting"
     try:
@@ -440,7 +446,16 @@ def _statement_problem(w, st, model, ports, first_addr, first_addr6=()):
                 return "clock rate is set on a serial interface"
             if int(w[3]) not in labgen.CLOCK_RATES:
                 return f"{w[3]} is not a clock rate IOS accepts ({', '.join(map(str, labgen.CLOCK_RATES))})"
-        if k in ("ip", "ip6", "portfast", "portsec", "desc", "nat", "acl", "hsrp", "clock") and len(w) > 2:
+        if k == "seclevel" and not 0 <= int(w[3]) <= 100:
+            return "security level is 0-100"
+        if k == "object":
+            if len(w) < 4:
+                return "write it as: object ASA NAME NET/LEN [nat (inside,outside) dynamic interface]"
+            ipaddress.ip_network(w[3], strict=True)
+            if len(w) > 4 and w[4] != "nat":
+                return "after the network only a nat rule may follow: nat (inside,outside) dynamic interface"
+        if k in ("ip", "ip6", "portfast", "portsec", "desc", "nat", "acl", "hsrp", "clock", "nameif", "seclevel") \
+                and len(w) > 2:
             if not _port_ok(ports[w[1]], labgen.long_if(w[2])):
                 return f"{w[1]} has no port {labgen.long_if(w[2])}"
         if k == "rid":
@@ -690,7 +705,6 @@ def verify_values(spec, bare_saved):
     root = ptlab.read_pkt(bare_saved).getroot().find("COMPARISONS/NODE")
     if root is not None:
         walk(root, [])
-    asa = {d["name"] for d in spec.get("device", []) if str(d.get("model", "")).startswith("asa-")}
     same = 0
     for path, (value, pattern) in built.items():
         if path not in filled:
@@ -700,10 +714,6 @@ def verify_values(spec, bare_saved):
             if pattern:     # graded by its pattern; the value is only what the Activity Wizard displays
                 issues.warn(msg + " (graded by pattern)")
                 same += bool(re.search(pattern[len("{{RegEx:"):-2], filled[path]))
-            elif path.split(" > ")[0] in asa and " > Ports > " in path and filled[path] in ("0.0.0.0", "0", ""):
-                # an ASA builds its ports from its startup-config at boot, which a load-and-save does not reach:
-                # Packet Tracer's value is the unbooted state, so only a live Check Results can confirm this item
-                issues.warn(msg + " (ASA not booted in the saved file: confirm with Check Results)")
             else:
                 issues.error(msg)
         else:

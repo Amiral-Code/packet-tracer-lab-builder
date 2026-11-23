@@ -98,17 +98,46 @@ SHOWN_NEGATIONS = {
 }
 
 
-def asa_config(snippet):
-    """An ASA's running-config from an empty (factory) one: the snippet's commands in order, interface names
-    expanded. Unlike IOS there is no factory text to merge into (an unconfigured ASA saves no lines)."""
-    out = []
+def index_interfaces(model):
+    """A library model's port names, from the device index `ptlab init` wrote."""
+    import json
+    with open(library_dir() / "devices" / "index.json", encoding="utf-8") as fh:
+        return json.load(fh)[model]["interfaces"]
+
+
+def asa_config(snippet, ports=()):
+    """An ASA's running-config, laid out as Packet Tracer prints it: every physical port, unconfigured ones as
+    `no nameif` / `no security-level` / `no ip address` / `shutdown`, configured ones with the snippet's lines
+    (shut unless the snippet says `no shutdown`, which is kept: Packet Tracer re-parses the text and an ASA port is
+    shut by default), then the snippet's other commands in order. (The template of an ASA saved switched off has
+    no lines to merge into.)"""
+    iface, other, cur = {}, [], None
     for raw in snippet.strip("\n").splitlines():
         line = raw.rstrip()
         if not line.strip() or line.strip() in ("!", "exit", "end", "conf t", "configure terminal", "enable"):
             continue
         if line.startswith("interface "):
-            line = "interface " + long_if(line.split(None, 1)[1])
-        out.append(line)
+            cur = long_if(line.split(None, 1)[1])
+            iface.setdefault(cur, [])
+        elif line.startswith(" ") and cur is not None:
+            iface[cur].append(line)
+        else:
+            if not line.startswith(" "):
+                cur = None
+            other.append(line)
+    out, head = [], [l for l in other if l.startswith("hostname ")]
+    out += head
+    for port in list(ports) + [p for p in iface if p not in ports]:
+        body = iface.get(port)
+        out.append(f"interface {port}")
+        if body is None:
+            if port.startswith("Management"):
+                out.append(" management-only")
+            out += [" no nameif", " no security-level", " no ip address", " shutdown"]
+        else:   # an ASA port is shut by default: `no shutdown` must stay in the text (Packet Tracer only hides it)
+            out += body + ([] if any(l.strip() in ("no shutdown", "shutdown") for l in body) else [" shutdown"])
+        out.append("!")
+    out += [l for l in other if not l.startswith("hostname ")]
     return out + ["end", ""]
 
 
@@ -492,7 +521,7 @@ def configs_for(spec, which):
     """Running-config text per router/switch: factory + hostname + snippets (+ faults for start)."""
     out = {}
     tpl_cfg = {}
-    asa = set()
+    asa = {}
     for d in spec["device"]:
         if ptbuild_model_is_host(d["model"]):
             continue
@@ -500,8 +529,8 @@ def configs_for(spec, which):
         if tpl.findtext("ENGINE/TYPE") not in IOS_TYPES:   # home routers, modems, clouds, WLCs: no IOS
             continue
         tpl_cfg[d["name"]] = [l.text or "" for l in tpl.findall("ENGINE/RUNNINGCONFIG/LINE")]
-        if tpl.findtext("ENGINE/TYPE") == "ASA":
-            asa.add(d["name"])
+        if tpl.findtext("ENGINE/TYPE") == "ASA":     # its physical ports, in Packet Tracer's order
+            asa[d["name"]] = [p for p in index_interfaces(d["model"]) if p[-1].isdigit()]
     cfg = spec.get("config", {})
     kind = spec["lab"].get("kind", "configure")
     answer_based_start = kind in ("troubleshoot", "mixed")
@@ -511,9 +540,9 @@ def configs_for(spec, which):
             snippet += cfg.get("answer", {}).get(name, "")
         else:
             snippet += cfg.get("start", {}).get(name, "")
-        text = asa_config(snippet) if name in asa else merge(factory, snippet)
+        text = asa_config(snippet, asa[name]) if name in asa else merge(factory, snippet)
         if which == "start" and kind == "mixed" and name in asa:
-            text = asa_config(snippet + "\n" + cfg.get("start", {}).get(name, ""))
+            text = asa_config(snippet + "\n" + cfg.get("start", {}).get(name, ""), asa[name])
         elif which == "start" and kind == "mixed":
             # Mixed activities start from the reference configuration, then use config.start
             # as an overlay for the intentionally unfinished work before hidden faults are added.
@@ -556,7 +585,8 @@ UDP_SERVICE_PORTS = {53: "DNS", 67: "DHCP", 68: "DHCP", 69: "TFTP", 123: "NTP", 
 CONNECTIVITY_STATEMENTS = ("ping", "ping6", "tcp", *TCP_PORTS, "udp")
 GRADE_STATEMENTS = ("ip", "ip6", "up", "gw", "gw6", "hostname", "line", "in", "dhcp", "vlan", "access", "trunk",
                     "route", "route6", "ospf", "rid", "passive", "stp", "portfast", "portsec", "desc", "banner",
-                    "nat", "acl", "hsrp", "pool", "secret", "user", "clock", *CONNECTIVITY_STATEMENTS, "cable")
+                    "nat", "acl", "hsrp", "pool", "secret", "user", "clock", "nameif", "seclevel", "object",
+                    *CONNECTIVITY_STATEMENTS, "cable")
 # the rates IOS (and Packet Tracer) accept for `clock rate` on a DCE serial interface
 CLOCK_RATES = (1200, 2400, 4800, 9600, 19200, 38400, 56000, 64000, 72000, 125000, 128000, 148000, 250000, 500000,
                800000, 1000000, 1300000, 2000000, 4000000)
@@ -719,10 +749,6 @@ def compile_grade(spec):
             (na, pa), (nb, pb) = lk["a"].split(None, 1), lk["b"].split(None, 1)
             if frozenset({(na, long_if(pa)), (nb, long_if(pb))}) not in graded:
                 _cable_item(items, checks, spec, na, pa, nb, pb)
-    asa = {d["name"] for d in spec.get("device", []) if str(d.get("model", "")).startswith("asa-")}
-    for it in items:                         # an ASA's config lines live in its startup-config (see ptlab.set_config)
-        if it["kind"] == "run_line" and it["device"] in asa:
-            it["kind"] = "start_line"
     return items, checks
 
 
@@ -751,6 +777,10 @@ def default_hint(w, item):
         return f"Compare {dev} {port}'s IPv6 address and prefix length with the addressing table (show ipv6 interface brief / ipv6config)."
     if kind == "gw6":
         return f"Check {dev}'s IPv6 default gateway (ipv6config): usually its router's link-local or global address."
+    if kind in ("nameif", "seclevel"):
+        return f"Check how {dev} {port} is named and trusted: show nameif / show running-config interface."
+    if kind in ("asa_obj_addr", "asa_obj_nat"):
+        return f"Check the network objects on {dev}: show running-config object, show nat."
     if kind == "description":
         return f"Check the description on {dev} {port}: show interfaces description."
     if kind == "banner":
@@ -876,8 +906,13 @@ def _statement(st, w, k, items, checks, spec):
     elif k == "acl":                    # acl DEV IFACE NAME|NUMBER in|out
         dev, iface, acl, way = w[1], long_if(w[2]), w[3], w[4]
         items.append({"device": dev, "kind": f"acl_{way}", "port": iface, "value": acl})
-        checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} access-group {acl} {way}",
-                       "block": "interface " + re.escape(iface), "has": [f"ip access-group {re.escape(acl)} {way}"]})
+        model = next((d["model"] for d in spec["device"] if d["name"] == dev), "")
+        if model.startswith("asa-"):   # an ASA binds an ACL globally, to the interface's nameif
+            checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} access-group {acl} {way}", "top": True,
+                           "has": [f"access-group {re.escape(acl)} {way} interface \\S+"]})
+        else:
+            checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} access-group {acl} {way}",
+                           "block": "interface " + re.escape(iface), "has": [f"ip access-group {re.escape(acl)} {way}"]})
     elif k == "hsrp":                   # hsrp DEV IFACE GROUP VIP [priority N] [preempt]
         dev, iface, grp, vip = w[1], long_if(w[2]), int(w[3]), ipaddress.ip_address(w[4])
         parent = f"interface {iface}"
@@ -886,6 +921,27 @@ def _statement(st, w, k, items, checks, spec):
             _line_item(items, checks, dev, parent, f"standby {grp} priority {int(w[w.index('priority') + 1])}")
         if "preempt" in w:
             _line_item(items, checks, dev, parent, f"standby {grp} preempt")
+    elif k == "nameif":                 # nameif ASA IFACE NAME
+        dev, iface = w[1], long_if(w[2])
+        items.append({"device": dev, "kind": "nameif", "port": iface, "value": w[3]})
+        checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} nameif {w[3]}",
+                       "block": "interface " + re.escape(iface), "has": [r"nameif " + re.escape(w[3])]})
+    elif k == "seclevel":               # seclevel ASA IFACE 0-100
+        dev, iface = w[1], long_if(w[2])
+        items.append({"device": dev, "kind": "seclevel", "port": iface, "value": str(int(w[3]))})
+        checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} security-level {int(w[3])}",
+                       "block": "interface " + re.escape(iface), "has": [r"security-level " + str(int(w[3]))]})
+    elif k == "object":                 # object ASA NAME NET/LEN [nat (IN,OUT) dynamic interface|A.B.C.D]
+        dev, name, net = w[1], w[2], ipaddress.ip_network(w[3], strict=True)
+        subnet = f"subnet {net.network_address} {net.netmask}"
+        items.append({"device": dev, "kind": "asa_obj_addr", "obj": name, "value": " " + subnet})
+        has = [re.escape(subnet)]
+        if len(w) > 4:
+            nat = " ".join(w[4:])
+            items.append({"device": dev, "kind": "asa_obj_nat", "obj": name, "value": " " + nat})
+            has.append(re.escape(nat))
+        checks.append({"device": dev, "desc": f"{dev} object network {name}", "block": "object network " + re.escape(name),
+                       "has": has})
     elif k == "pool":                   # pool DEV NAME NET/LEN [gw A.B.C.D] [dns A.B.C.D]
         dev, name, net = w[1], w[2], ipaddress.ip_network(w[3], strict=True)
         opts = dict(zip(w[4::2], w[5::2]))
@@ -1118,7 +1174,11 @@ DYNAMIC = re.compile(r"^(router (ospf|eigrp|rip|bgp)|standby |channel-group |spa
 
 
 def needs_convergence(spec):
-    """Routing protocols, HSRP, EtherChannel and STP need time before the answer network is compared."""
+    """Routing protocols, HSRP, EtherChannel and STP need time before the answer network is compared. An ASA applies
+    its configuration after load: without forwarding the answer network, Packet Tracer finds no nameif, objects or
+    access-groups and drops those items (observed: 5/12 kept without, 12/12 with 60 s)."""
+    if any(str(d.get("model", "")).startswith("asa-") for d in spec.get("device", [])):
+        return True
     return any(DYNAMIC.search(re.sub(r"^\s+", "", text, flags=re.M))
                for text in spec.get("config", {}).get("answer", {}).values())
 

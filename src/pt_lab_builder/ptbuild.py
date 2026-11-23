@@ -130,6 +130,8 @@ def clone_device(root, template, name, x, y, used_macs=None):
     d = copy.deepcopy(template)
     eng = d.find("ENGINE")
     eng.find("NAME").text = name
+    if eng.find("POWER") is not None:     # templates saved switched off (physical-mode activities) start powered on
+        eng.find("POWER").text = "true"
     for desc in d.iter("DESCRIPTION"):   # port descriptions left in source templates are re-applied on load
         if desc.text:
             desc.text = ""
