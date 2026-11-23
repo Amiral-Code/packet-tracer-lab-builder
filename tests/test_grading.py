@@ -254,6 +254,14 @@ def with_cable(t, a, pa, b, pb, kind):
     return t
 
 
+class VlanDatabase(unittest.TestCase):
+    def test_configured_vlans_are_written_to_the_vlan_database(self):
+        d = device("SW1", "", vlans=[(1, "default")])
+        ptlab.set_config(d, "hostname SW1\nvlan 10\n name USERS\nvlan 20,30\ninterface Fa0/1\n switchport access vlan 10\n")
+        got = {v.get("number"): v.get("name") for v in d.iter("VLAN")}
+        self.assertEqual(got, {"1": "default", "10": "USERS", "20": "VLAN0020", "30": "VLAN0030"})
+
+
 class Cabling(unittest.TestCase):
     SPEC = {"lab": {"title": "t", "scenario": "s", "kind": "mixed"},
             "device": [{"name": "R1", "model": "router-2911"}, {"name": "PC1", "model": "pc"}],

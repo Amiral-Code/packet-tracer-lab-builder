@@ -64,6 +64,37 @@ def set_config(dev, text):
         rc.remove(line)
     for line in text.strip("\n").splitlines():
         ET.SubElement(rc, "LINE").text = line.rstrip()
+    sync_vlans(eng, text)
+
+
+def sync_vlans(eng, text):
+    """Mirror `vlan N` / ` name X` sections into the switch's VLAN database (ENGINE/VLANS). On a 2960 VLANs live in
+    vlan.dat, not the running-config, and Packet Tracer drops assessment items (VLANS > N > VLAN Name) for VLANs
+    the saved database does not contain."""
+    vlans = eng.find("VLANS")
+    if vlans is None:
+        return
+    wanted, current = {}, None
+    for raw in text.splitlines():
+        m = re.match(r"vlan ([\d,-]+)\s*$", raw)
+        if m:
+            current = [n for part in m.group(1).split(",") for n in
+                       (range(int(part.split("-")[0]), int(part.split("-")[1]) + 1) if "-" in part else [int(part)])]
+            for n in current:
+                wanted.setdefault(n, f"VLAN{n:04d}")
+            continue
+        if current and raw.startswith(" ") and raw.strip().startswith("name "):
+            for n in current:
+                wanted[n] = raw.strip()[5:].strip()
+            continue
+        if not raw.startswith(" "):
+            current = None
+    existing = {v.get("number"): v for v in vlans.findall("VLAN")}
+    for n, name in sorted(wanted.items()):
+        if str(n) in existing:
+            existing[str(n)].set("name", name)
+        else:
+            ET.SubElement(vlans, "VLAN", {"number": str(n), "rspan": "0", "name": name})
 
 
 def get_config(dev):
