@@ -33,20 +33,19 @@ The live checklist (one sitting, about 30 minutes, in `~/Study/labs/ccna/pt/work
 | Check | File | Pass when |
 |---|---|---|
 | ~~Wizard password~~ confirmed | `branch-cabling.pka` (password `tiznit`) | Extensions → Activity Wizard asks for it, `tiznit` opens it, a wrong one doesn't |
-| Start in closet (2nd try) | `branch-cabling.pka` | the activity opens in the Physical view, inside Branch Wiring Closet |
+| ~~Start in closet~~ confirmed (2nd try) | `branch-cabling.pka` | the activity opens in the Physical view, inside Branch Wiring Closet |
 | ~~Hints~~ confirmed | any lab, before doing anything | Check Results → each red item shows its hint |
 | ~~Debrief~~ confirmed | any lab | the last instruction page is the debrief; it is also the complete feedback |
-| Fixed topology (2nd try) | `static-two-sites.pka` | deleting a device or a cable is refused |
+| ~~Fixed topology~~ confirmed (2nd try) | `static-two-sites.pka` | deleting a device or a cable is refused |
 | ~~Countdown~~ confirmed | Northstar (90 min) | the activity window shows Time Left counting down |
-| Config lines | `static-two-sites.pka` | the two `ip route` items turn green |
-| Sub-command lines | Northstar | `in`/`access`/`trunk`/`ospf` items turn green when fixed |
-| TCP tests | a small ACL lab (to build) | `http ... ` passes, `telnet ... fail` passes only with the ACL in place |
+| Config lines | `feature-probe.pka` | `route` and `stp` items turn green when configured |
+| Sub-command lines | `feature-probe.pka` | `access`, `ospf` and the ACL `in` items turn green |
+| TCP tests | `feature-probe.pka` | `http` passes and `https ... fail` passes only once the ACL is applied |
 | Convergence | Northstar | items comparing OSPF-dependent state are not falsely red right after opening |
 
 Then fix whatever fails, and add:
 
-- An `examples/feature-probe.toml` lab that exercises every statement and control in one file, so the checklist
-  is one activity.
+- ~~An `examples/feature-probe.toml` lab~~ done: one 30-minute lab covering every remaining check.
 - An integration test that decodes every built example and checks its structure (no `<X />`, settings present,
   every graded leaf has checkType 2 and a hint).
 

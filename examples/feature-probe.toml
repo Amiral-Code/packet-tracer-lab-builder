@@ -1,0 +1,163 @@
+[lab]
+id = "feature-probe"
+title = "Web-Only Server Segment"
+level = 2
+kind = "configure"
+exam = "CCNA 5.6 / 2.1 / 3.3 - ACLs, VLANs, static and OSPF routing"
+time = 30
+scenario = """
+A small office has one router, one switch, a user PC and a web server on its own segment.
+The addresses are already in place and everything can reach everything.
+
+Put the user port in its own VLAN, make the switch root for that VLAN, give the router a
+static route and an OSPF network, and lock the server segment down so that users can
+reach the **web site** (HTTP) and ping the server, and nothing else, not even HTTPS.
+"""
+objectives = [
+  "Create and name a VLAN and assign access ports",
+  "Set the spanning-tree root for a VLAN with a bridge priority",
+  "Configure a static route and an OSPF network statement",
+  "Write and apply a named extended ACL that permits one service",
+]
+
+[[device]]
+name = "R1"
+model = "router-2911"
+[[device]]
+name = "SW1"
+model = "switch-2960"
+[[device]]
+name = "PC1"
+model = "pc"
+[[device]]
+name = "SRV1"
+model = "server"
+
+[[link]]
+a = "R1 G0/0"
+b = "SW1 G0/1"
+[[link]]
+a = "SW1 Fa0/1"
+b = "PC1 Fa0"
+[[link]]
+a = "R1 G0/1"
+b = "SRV1 Fa0"
+
+[[area]]
+label = "USERS  -  VLAN 10  -  192.168.1.0/24"
+color = "cyan"
+devices = ["SW1", "PC1"]
+[[area]]
+label = "SERVERS  -  192.168.2.0/24"
+color = "orange"
+devices = ["SRV1"]
+
+[addressing]
+rows = [
+  ["R1",   "G0/0", "192.168.1.1/24",  ""],
+  ["R1",   "G0/1", "192.168.2.1/24",  ""],
+  ["PC1",  "Fa0",  "192.168.1.10/24", "192.168.1.1"],
+  ["SRV1", "Fa0",  "192.168.2.10/24", "192.168.2.1"],
+]
+
+[config.start]
+R1 = """
+interface G0/0
+ ip address 192.168.1.1 255.255.255.0
+ no shutdown
+interface G0/1
+ ip address 192.168.2.1 255.255.255.0
+ no shutdown
+"""
+
+[config.answer]
+R1 = """
+interface G0/0
+ ip address 192.168.1.1 255.255.255.0
+ no shutdown
+interface G0/1
+ ip address 192.168.2.1 255.255.255.0
+ ip access-group WEB-ONLY out
+ no shutdown
+ip access-list extended WEB-ONLY
+ permit tcp 192.168.1.0 0.0.0.255 host 192.168.2.10 eq www
+ permit icmp 192.168.1.0 0.0.0.255 host 192.168.2.10
+ deny ip any any
+ip route 10.99.0.0 255.255.0.0 192.168.2.254
+router ospf 1
+ network 192.168.1.0 0.0.0.255 area 0
+"""
+SW1 = """
+vlan 10
+ name USERS
+interface Fa0/1
+ switchport mode access
+ switchport access vlan 10
+interface G0/1
+ switchport mode access
+ switchport access vlan 10
+spanning-tree vlan 10 priority 4096
+"""
+
+[[part]]
+title = "Users VLAN"
+intro = "Everything is in VLAN 1 today. Move the user side into its own VLAN."
+steps = [
+  "On **SW1**, create VLAN 10 and name it `USERS`.",
+  "Make **Fa0/1** (PC1) and **G0/1** (uplink to R1) access ports in VLAN 10.",
+  "Make SW1 the spanning-tree root for VLAN 10 with priority **4096**.",
+  "Check: `show vlan brief`, `show spanning-tree vlan 10`, and PC1 still pings 192.168.1.1.",
+]
+hint = "An access port needs both `switchport mode access` and `switchport access vlan 10`. Bridge priorities go in steps of 4096."
+why = "Moving the uplink with the user port keeps PC1 and its gateway in the same VLAN; forgetting the uplink is the classic way to cut users off."
+
+[[part]]
+title = "Routing"
+intro = "R1 will later learn routes over OSPF and needs one static route to a lab network behind the server segment."
+steps = [
+  "Add a static route to **10.99.0.0/16** via **192.168.2.254**.",
+  "Start **OSPF process 1** and advertise **192.168.1.0/24** in **area 0**.",
+  "Check: `show ip route static`, `show ip protocols`.",
+]
+hint = "OSPF network statements use a wildcard mask: /24 is 0.0.0.255."
+why = "Static and dynamic routes coexist: the static one covers what no neighbour advertises."
+
+[[part]]
+title = "Web-only server segment"
+intro = "Users may browse the web site on SRV1 and ping it. Everything else towards the server segment is blocked."
+steps = [
+  "On **R1**, create the named extended ACL **WEB-ONLY**: permit TCP from 192.168.1.0/24 to host 192.168.2.10 port **www**, permit ICMP from the same users to the same host, then deny everything else explicitly.",
+  "Apply it **outbound** on **G0/1** (towards the servers).",
+  "Check from PC1: Web Browser to `http://192.168.2.10` works, `https://192.168.2.10` does not, and ping works.",
+]
+hint = "Outbound on G0/1 filters traffic leaving R1 towards the server. Order matters: the deny ip any any must come last."
+why = "Allow-listing one service and denying the rest is how real server segments are exposed; the explicit deny makes the intent visible and countable in show access-lists."
+
+[grade]
+items = [
+  "vlan SW1 10 USERS",
+  "access SW1 Fa0/1 10",
+  "access SW1 G0/1 10",
+  "stp SW1 10 4096",
+  "route R1 10.99.0.0/16 192.168.2.254",
+  "ospf R1 1 192.168.1.0/24 0",
+  'in R1 "ip access-list extended WEB-ONLY" "permit tcp 192.168.1.0 0.0.0.255 host 192.168.2.10 eq www"',
+  'in R1 "ip access-list extended WEB-ONLY" "deny ip any any"',
+  'in R1 "interface GigabitEthernet0/1" "ip access-group WEB-ONLY out"',
+  "ping PC1 SRV1",
+  "http PC1 SRV1",
+  "https PC1 SRV1 fail",
+]
+
+debrief = """
+This lab touched every kind of check the builder can generate: VLAN names, access ports,
+spanning-tree priority, a static route, an OSPF network, named ACL entries, an interface
+setting, and three connectivity tests, one of which **must fail**.
+
+The HTTPS test is the interesting one: before your ACL it succeeds, so it starts red; once
+the ACL is in place the connection is refused, which is exactly what the test expects.
+"""
+questions = [
+  "Why must the ACL be outbound on G0/1 and not inbound on G0/0 if more user VLANs are added later?",
+  "Which line of `show access-lists` counts the blocked HTTPS attempts?",
+]

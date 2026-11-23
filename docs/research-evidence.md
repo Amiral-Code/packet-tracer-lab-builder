@@ -88,5 +88,6 @@ Static executable evidence:
   generated device had an entry. The builder now rebuilds Existing Devices from the generated devices and ports
   (Device_Remove, Port_Remove/Connect/Disconnect per port) and the presets switch those on; re-check pending.
   This also makes `cli-only`'s per-device "Device Use Config Tab" effective.
+- 2nd live tries: start in closet **confirmed**; fixed topology **confirmed** (deleting a device and a cable refused).
 - Variable Manager authoring, regular-expression answers, scoring-model partial credit, and script modules remain
   research tasks.
