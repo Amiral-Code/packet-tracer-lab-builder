@@ -38,9 +38,9 @@ The live checklist (one sitting, about 30 minutes, in `~/Study/labs/ccna/pt/work
 | ~~Debrief~~ confirmed | any lab | the last instruction page is the debrief; it is also the complete feedback |
 | ~~Fixed topology~~ confirmed (2nd try) | `static-two-sites.pka` | deleting a device or a cable is refused |
 | ~~Countdown~~ confirmed | Northstar (90 min) | the activity window shows Time Left counting down |
-| Config lines | `feature-probe.pka` | `route` and `stp` items turn green when configured |
-| Sub-command lines | `feature-probe.pka` | `access`, `ospf` and the ACL `in` items turn green |
-| TCP tests | `feature-probe.pka` | `http` passes and `https ... fail` passes only once the ACL is applied |
+| ~~Config lines~~ confirmed (route item: trailing-space fix, re-check) | `feature-probe.pka` | `route` and `stp` items turn green when configured |
+| ~~Sub-command lines~~ confirmed | `feature-probe.pka` | `access`, `ospf` and the ACL `in` items turn green |
+| ~~TCP tests~~ confirmed | `feature-probe.pka` | `http` passes and `https ... fail` passes only once the ACL is applied |
 | Convergence | Northstar | items comparing OSPF-dependent state are not falsely red right after opening |
 
 Then fix whatever fails, and add:

@@ -407,6 +407,12 @@ def vlan_list(text):
     return ",".join(out)
 
 
+# Lines Packet Tracer writes into its running-config with a trailing space (seen in a saved activity:
+# "ip route 10.99.0.0 255.255.0.0 192.168.2.254 "). LINES items are matched on the exact line, so an item
+# without the space does not exist in the answer and Packet Tracer silently drops it.
+PT_TRAILING_SPACE = {"ip route": " "}
+
+
 def _line_item(items, checks, dev, parent, line):
     """A running-config line Packet Tracer grades natively (LINES node) plus the matching local check."""
     line = " ".join(line.split())
@@ -416,7 +422,8 @@ def _line_item(items, checks, dev, parent, line):
         checks.append({"device": dev, "desc": f"{dev}: {parent} / {line}", "block": re.escape(parent),
                        "has": [re.escape(line)]})
     else:
-        items.append({"device": dev, "kind": "run_line", "line_id": line, "value": line})
+        shown = line + PT_TRAILING_SPACE.get(" ".join(line.split()[:2]), "")
+        items.append({"device": dev, "kind": "run_line", "line_id": shown, "value": shown})
         checks.append({"device": dev, "desc": f"{dev}: {line}", "has": [re.escape(line)], "top": True})
 
 

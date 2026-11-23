@@ -88,6 +88,11 @@ class GradeStatements(unittest.TestCase):
                         'in R1 "router ospf 1" "router-id 1.1.1.1"'], [device("R1", R1)])
         self.assertTrue(all(res), res)
 
+    def test_static_route_items_carry_packet_tracers_trailing_space(self):
+        items, res = grade(["route R1 0.0.0.0/0 10.0.0.2"], [device("R1", R1)])
+        self.assertEqual(items[0]["line_id"], "ip route 0.0.0.0 0.0.0.0 10.0.0.2 ")
+        self.assertEqual(res, [True])          # the local check still matches the stripped line
+
     def test_line_only_matches_top_level_lines(self):
         # Packet Tracer compares whole lines: an indented sub-command never matches a top-level check
         _, res = grade(["line R1 network 10.0.0.0 0.0.0.3 area 0"], [device("R1", R1)])

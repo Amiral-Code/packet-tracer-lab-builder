@@ -89,5 +89,16 @@ Static executable evidence:
   (Device_Remove, Port_Remove/Connect/Disconnect per port) and the presets switch those on; re-check pending.
   This also makes `cli-only`'s per-device "Device Use Config Tab" effective.
 - 2nd live tries: start in closet **confirmed**; fixed topology **confirmed** (deleting a device and a cable refused).
+- Feature probe (`examples/feature-probe.toml`): Check Results complete, Connectivity Tests 3/3 (ping, HTTP succeed;
+  HTTPS fail with the ACL): config lines, sub-command lines, Access VLAN and TCP tests **confirmed**.
+- Packet Tracer **silently drops** assessment items whose node does not exist in the answer network as it saves
+  it. Two cases found by decoding the activity the student saved after Check Results:
+  - VLAN name: the VLAN existed only in the answer's config text, not in the switch's VLAN database
+    (`ENGINE/VLANS`). Fixed by mirroring `vlan`/`name` sections into the database; confirmed (the item appeared).
+  - Static routes: Packet Tracer writes `ip route …` with a **trailing space**, so the LINES node ID must end with
+    one. Fixed (`PT_TRAILING_SPACE`); re-check pending.
+  The same saved file showed leftover port `DESCRIPTION`s from source templates ("Naar SW1 (beheer ongetagd)" on a
+  2911, "Trunk naar SW1" on a 3560) being re-applied as `description` lines; they are now cleared at library build
+  and on every device clone.
 - Variable Manager authoring, regular-expression answers, scoring-model partial credit, and script modules remain
   research tasks.

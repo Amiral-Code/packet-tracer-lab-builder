@@ -129,6 +129,9 @@ def clone_device(root, template, name, x, y, used_macs=None):
     d = copy.deepcopy(template)
     eng = d.find("ENGINE")
     eng.find("NAME").text = name
+    for desc in d.iter("DESCRIPTION"):   # port descriptions left in source templates are re-applied on load
+        if desc.text:
+            desc.text = ""
     if eng.find("SYS_NAME") is not None:
         eng.find("SYS_NAME").text = name
     if eng.find("SAVE_REF_ID") is None:   # files older than ~7.2 have none; links need one

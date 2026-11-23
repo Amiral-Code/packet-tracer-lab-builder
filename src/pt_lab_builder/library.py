@@ -107,8 +107,8 @@ def factory_reset(device, kind):
             for v in list(vl):
                 if v.get("number") not in DEFAULT_VLANS:
                     vl.remove(v)
-    for p in device.iter("PORT"):                    # saved addresses on every port and host
-        for tag in ("IP", "SUBNET", "PORT_GATEWAY", "PORT_DNS"):
+    for p in device.iter("PORT"):                    # saved addresses and descriptions on every port and host
+        for tag in ("IP", "SUBNET", "PORT_GATEWAY", "PORT_DNS", "DESCRIPTION"):
             if p.find(tag) is not None:
                 p.find(tag).text = ""
         if p.find("PORT_DHCP_ENABLE") is not None:
