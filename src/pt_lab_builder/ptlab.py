@@ -34,7 +34,9 @@ def read_pkt(path):
     with tempfile.TemporaryDirectory() as tmp:
         x = os.path.join(tmp, "f.xml")
         ptcrypt("decode", path, x)
-        return ET.parse(x)
+        with open(x, "rb") as fh:  # the Wizard password salt (ACTIVITY VALUE) holds XML-forbidden control bytes
+            text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", fh.read().decode("utf-8", "replace"))
+        return ET.ElementTree(ET.fromstring(text))
 
 
 def write_pkt(tree, path):
@@ -95,6 +97,24 @@ def sync_vlans(eng, text):
             existing[str(n)].set("name", name)
         else:
             ET.SubElement(vlans, "VLAN", {"number": str(n), "rspan": "0", "name": name})
+
+
+# Switching::ETemplate values, from the `sdm prefer` command handlers (sdm_prefer_default passes 0,
+# sdm_prefer_dual_default 5, dual_routing 6, dual_vlan 7, access 2, routing 3, vlan 4, lanbase_routing 8, qos 9).
+SDM_DUAL_IPV4_IPV6 = 5
+
+
+def set_sdm_template(dev, template):
+    """Set a switch's active and next SDM template (ENGINE/SDM), as if `sdm prefer` had been followed by a reload."""
+    sdm = dev.find("ENGINE/SDM")
+    if sdm is None:
+        return False
+    for tag in ("ACTIVE_TEMPLATE", "NEXT_TEMPLATE"):
+        el = sdm.find(tag)
+        if el is None:
+            el = ET.SubElement(sdm, tag)
+        el.text = str(template)
+    return True
 
 
 def get_config(dev):

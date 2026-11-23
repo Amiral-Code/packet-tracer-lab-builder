@@ -102,3 +102,22 @@ Static executable evidence:
   and on every device clone.
 - Variable Manager authoring, regular-expression answers, scoring-model partial credit, and script modules remain
   research tasks.
+
+## Round-trip verification (2026-11-23)
+
+Opening a built activity in Packet Tracer and saving it immediately (Ctrl+S sent to a hidden window) already shows
+the pruned assessment tree, so pruning happens at load. `ptlab verify SPEC SAVED.pka` compares the built items with
+the kept ones. First run over the examples: four clean, Northstar 43/48. Causes, each fixed:
+
+- `no switchport` was removed by the builder's merge (every indented `no X` was treated as "remove X"), so the 3560
+  rejected the routed port's IP address. The merge now keeps negations IOS shows in its running-config.
+- IPv6 on the 3560 needs `sdm prefer dual-ipv4-and-ipv6 default` and a reload. The SDM template is stored in
+  `ENGINE/SDM/ACTIVE_TEMPLATE`; `sdm_prefer_dual_default` passes `Switching::ETemplate` 5 (default 0, access 2,
+  routing 3, vlan 4, dual-routing 6, dual-vlan 7, lanbase-routing 8, qos 9). Switches whose answer uses IPv6 are
+  preset to 5 in every network; `ipv6 unicast-routing` and the IPv6 addresses then appear in Packet Tracer's config.
+- Even with the addresses present, the two `ipv6 address …` line items were dropped while every line without `:`
+  was kept. Inference: `:` cannot appear in a LINES node ID (it separates Packet Tracer assessment paths, e.g.
+  `Network:Router0:Power`). Lint now rejects such items.
+
+After the fixes all five examples pass: every item and connectivity test kept, every local check passing on
+Packet Tracer's answer network.

@@ -84,6 +84,10 @@ class LintTests(unittest.TestCase):
         self.assertError(lambda s: s["grade"]["items"].append("tcp PC1 R1 70000"), "1-65535")
         self.assertError(lambda s: s["grade"]["items"].append("https PC1 NOPE"), "unknown device")
 
+    def test_config_lines_with_colons_are_rejected(self):
+        self.assertError(lambda s: s["grade"]["items"].append('in R1 "interface GigabitEthernet0/0" "ipv6 address 2001:DB8::1/64"'),
+                         "containing ':'")
+
     def test_valid_new_statements_pass(self):
         errors = self.lint(lambda s: s["grade"]["items"].extend([
             "vlan SW1 10 SALES", "access SW1 Fa0/1 10", "trunk SW1 G0/1 allowed 10,20 native 99",

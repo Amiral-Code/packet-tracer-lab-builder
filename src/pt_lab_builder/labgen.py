@@ -82,6 +82,18 @@ def blocks(lines):
     return out
 
 
+# "no X" lines IOS keeps in its running-config. Any other "no X" in a snippet only removes X (for example
+# "no switchport access vlan 10" in a start overlay). Dropping these was a real bug: CORE1's "no switchport" was
+# lost, so Packet Tracer rejected the routed port's IP address and silently dropped its assessment items.
+SHOWN_NEGATIONS = {
+    "no switchport", "no ip proxy-arp", "no ip redirects", "no ip unreachables", "no cdp enable", "no keepalive",
+    "no mdix auto", "no negotiation auto", "no ip route-cache", "no lldp transmit", "no lldp receive",
+    "no logging event link-status", "no auto-summary", "no synchronization", "no ip domain-lookup", "no ip cef",
+    "no ipv6 cef", "no cdp run", "no ip http server", "no ip routing", "no service password-encryption",
+    "no logging console", "no ip classless",
+}
+
+
 def merge(factory_lines, snippet):
     """Apply a CLI snippet (config-mode commands, running-config style) to a factory config."""
     base = blocks(factory_lines)
@@ -110,8 +122,8 @@ def merge(factory_lines, snippet):
             hit = [i for i, b in enumerate(body) if _cancels(line, b.strip())]
             keep = line != "no shutdown" and not (line.startswith("no ") and not line.startswith("no ip address") and hit)
             if line.startswith("no ") and line not in ("no shutdown", "no ip address"):
-                hit += [i for i, b in enumerate(body) if b.strip() == line[3:]]
-                keep = False
+                hit += [i for i, b in enumerate(body) if b.strip() in (line[3:], line)]
+                keep = line in SHOWN_NEGATIONS          # e.g. "no switchport" stays in the running-config
             new_line = " " + line
             if hit:
                 first = min(hit)
@@ -124,7 +136,9 @@ def merge(factory_lines, snippet):
         sec = None
         if line.startswith("no "):                   # global "no X" removes line X
             target = line[3:]
-            base = [(h, b) for h, b in base if h or b[0] != target]
+            base = [(h, b) for h, b in base if h or b[0] not in (target, line)]
+            if line in SHOWN_NEGATIONS:             # e.g. "no ip domain-lookup" stays in the running-config
+                base.append((None, [line]))
             continue
         if line.startswith("hostname "):
             base = [(h, b) if h or not b[0].startswith("hostname ") else (None, [line]) for h, b in base]
@@ -267,6 +281,14 @@ def layout(spec):
         x0 += width * XSTEP + GAP
 
 
+def dual_stack_switches(spec):
+    """Switches whose answer configuration uses IPv6: they need `sdm prefer dual-ipv4-and-ipv6 default`, which only
+    takes effect after a reload, so the builder presets the active template instead."""
+    models = {d["name"]: d["model"] for d in spec["device"]}
+    return [name for name, text in spec.get("config", {}).get("answer", {}).items()
+            if str(models.get(name, "")).startswith(("switch", "l3switch")) and re.search(r"^\s*ipv6 ", text, re.M)]
+
+
 def build_topology(spec, configs, pcs, which="answer"):
     """which = "start" leaves out the cables the student must add (links with student = true)."""
     layout(spec)
@@ -306,6 +328,8 @@ def build_topology(spec, configs, pcs, which="answer"):
                 t.note(text, round(lx), round(ly))
     for name, text in configs.items():
         ptlab.set_config(t.devices[name], "\n".join(text))
+    for name in dual_stack_switches(spec):  # same SDM template in every network, so IPv6 works without a reload
+        ptlab.set_sdm_template(t.devices[name], ptlab.SDM_DUAL_IPV4_IPV6)
     for name, s in pcs.items():
         ptlab.set_pc(t.devices[name], s)
     for n in spec.get("note", []):

@@ -14,6 +14,7 @@ import ipaddress
 import json
 import re
 import shlex
+import xml.etree.ElementTree as ET
 
 from . import labgen, ptbuild, ptlab
 from .paths import library_dir
@@ -160,6 +161,19 @@ def lint(spec) -> Issues:
                     issues.error(f"{ep[0]} {labgen.short_if(ep[1])} is cabled twice (links {used[ep]} and {i})")
                 used[ep] = i
                 cabled.add(ep)
+
+    # multilayer-switch ports are switchports: an IP address on a physical port needs "no switchport" first
+    # (IOS and Packet Tracer reject the address otherwise, and the port's assessment items are silently dropped)
+    for which in ("start", "answer"):
+        for name, text in spec.get("config", {}).get(which, {}).items():
+            if not str(model.get(name, "")).startswith("l3switch"):
+                continue
+            for head, body in ptlab.blocks(text.splitlines()).items():
+                if not head.startswith("interface ") or head.split()[1].startswith(("Vlan", "Loopback", "Port-channel", "Tunnel", "vlan", "lo", "po", "Lo", "Po")):
+                    continue
+                if any(l.startswith("ip address ") for l in body) and "no switchport" not in body:
+                    issues.error(f"[config.{which}] {name} {head}: an IP address on a multilayer-switch port needs "
+                                 f"'no switchport' first")
 
     # sites: each device in at most one site; unlisted devices go to the first site
     sites = spec.get("site", [])
@@ -327,6 +341,10 @@ def _statement_problem(w, st, model, ports, first_addr):
             parts = shlex.split(st)
             if len(parts) != 4:
                 return 'write it as: in DEV "PARENT LINE" "SUB-COMMAND" (quote both)'
+        if k in ("line", "in") and ":" in st.split(None, 2)[2]:
+            # every config-line item containing ':' (IPv6 addresses) was dropped by Packet Tracer at load, while the
+            # same lines without ':' were kept; ':' separates Packet Tracer's assessment paths
+            return "Packet Tracer silently drops config-line items containing ':' (IPv6); grade IPv6 another way"
         if k in ("vlan", "access") and not 1 <= int(w[2 if k == "vlan" else 3]) <= 4094:
             return "VLAN must be 1-4094"
         if k in ("access", "trunk"):
@@ -417,3 +435,58 @@ def selfcheck(spec) -> Issues:
             else:
                 issues.error(msg)
     return issues, sum(answer), len(answer), sum(start)
+
+
+def graded_paths(comparisons_root):
+    """Paths (device > ... > item ID) of every graded leaf (checkType 2) under a COMPARISONS/NODE tree."""
+    out = []
+
+    def walk(node, path):
+        here = path + [node.findtext("ID") or ""]
+        name = node.find("NAME")
+        if name is not None and name.get("checkType") == "2":
+            out.append(" > ".join(here[1:]))
+        for child in node.findall("NODE"):
+            walk(child, here)
+
+    if comparisons_root is not None:
+        walk(comparisons_root, [])
+    return out
+
+
+def verify_saved(spec, saved):
+    """Compare a lab with the same activity after Packet Tracer has opened and saved it.
+
+    Packet Tracer silently drops assessment items whose node does not exist in its own answer network (already at
+    load time, so a save made right after opening is enough). Reports dropped items and connectivity tests, and
+    runs the local checks against Packet Tracer's rewritten answer network, which `ptlab check` relies on."""
+    issues = Issues()
+    items, checks = labgen.compile_grade(spec)
+    expected = graded_paths(ptlab.comparisons(items).find("NODE"))
+    tree = ptlab.read_pkt(saved)
+    root = tree.getroot()
+    if root.tag != "PACKETTRACER5_ACTIVITY":
+        issues.error(f"{saved} is not an activity (.pka)")
+        return issues, {}
+    kept = set(graded_paths(root.find("COMPARISONS/NODE")))
+    dropped = [p for p in expected if p not in kept]
+    for p in dropped:
+        issues.error(f"Packet Tracer dropped the item {p}: it does not exist in its answer network")
+    for p in sorted(kept - set(expected)):
+        issues.warn(f"Packet Tracer grades an item the spec did not ask for: {p}")
+    nets = root.findall("PACKETTRACER5")
+    answer = nets[2] if len(nets) >= 3 else None
+    tests = labgen.connectivity_tests(spec)
+    saved_tests = len(answer.findall("SCENARIOSET/SCENARIO/PDU")) if answer is not None else 0
+    if saved_tests < len(tests):
+        issues.error(f"Packet Tracer kept {saved_tests} of {len(tests)} connectivity tests")
+    passed = 0
+    if answer is not None:
+        res = ptlab.grade({"check": checks}, ET.ElementTree(answer), checks, quiet=True)
+        passed = sum(res)
+        for c, ok in zip(checks, res):
+            if not ok:
+                issues.error(f"local check fails on Packet Tracer's answer network: {c['desc']} "
+                             f"(ptlab check would mark a correct student wrong)")
+    return issues, {"expected": len(expected), "kept": len(expected) - len(dropped), "tests": len(tests),
+                    "saved_tests": saved_tests, "local": passed, "local_total": len(checks)}

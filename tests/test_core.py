@@ -35,6 +35,22 @@ class CoreTests(unittest.TestCase):
         self.assertIn(" ip address 10.0.0.1 255.255.255.252", text)
         self.assertNotIn("\n shutdown\n", text)
 
+    def test_merge_keeps_negations_shown_in_the_running_config(self):
+        out = labgen.merge(["version 15.0", "ip domain-lookup", "interface GigabitEthernet0/1", " switchport mode access",
+                            "end"],
+                           "interface G0/1\n no switchport\n ip address 10.0.0.1 255.255.255.252\nno ip domain-lookup\n")
+        i = out.index("interface GigabitEthernet0/1")
+        self.assertIn(" no switchport", out[i + 1:i + 4])
+        self.assertIn("no ip domain-lookup", out)
+        self.assertNotIn("ip domain-lookup", out)
+
+    def test_merge_still_removes_with_other_negations(self):
+        out = labgen.merge(["version 15.0", "interface FastEthernet0/1", " switchport access vlan 10", "end"],
+                           "interface Fa0/1\n no switchport access vlan 10\n")
+        i = out.index("interface FastEthernet0/1")
+        self.assertNotIn(" switchport access vlan 10", out)
+        self.assertNotIn(" no switchport access vlan 10", out)
+
     def test_data_directory_override(self):
         with tempfile.TemporaryDirectory() as directory:
             old = os.environ.get("PTLAB_DATA_DIR")

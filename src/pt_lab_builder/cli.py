@@ -51,6 +51,9 @@ def parser() -> argparse.ArgumentParser:
     check = sub.add_parser("check", help="grade a student's saved .pka")
     check.add_argument("spec", type=Path)
     check.add_argument("activity", type=Path)
+    verify = sub.add_parser("verify", help="compare a lab with the same activity after Packet Tracer opened and saved it")
+    verify.add_argument("spec", type=Path)
+    verify.add_argument("saved", type=Path, help="the built .pka, opened in Packet Tracer and saved (Ctrl+S)")
     sub.add_parser("doctor", help="show whether the local installation is ready")
     sub.add_parser("models", help="list locally available Packet Tracer device model keys")
     return p
@@ -75,6 +78,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if labgen.verify(labgen.load_spec(str(args.spec))) else 1
     if args.command == "check":
         return labgen.check(str(args.spec), str(args.activity))
+    if args.command == "verify":
+        from . import validate
+        issues, n = validate.verify_saved(labgen.load_spec(str(args.spec)), str(args.saved))
+        if n:
+            issues.report(f"verify (items kept {n['kept']}/{n['expected']}, connectivity tests {n['saved_tests']}/"
+                          f"{n['tests']}, local checks on Packet Tracer's answer {n['local']}/{n['local_total']})")
+        else:
+            issues.report("verify")
+        return 1 if issues.errors else 0
     if args.command == "models":
         return library.list_models()
     raise AssertionError(args.command)

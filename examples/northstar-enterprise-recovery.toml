@@ -741,8 +741,6 @@ items = [
   "ip CORE1 Vlan99 10.10.99.1/24",
   "line CORE1 ip routing",
   "line CORE1 ipv6 unicast-routing",
-  'in CORE1 "interface GigabitEthernet0/1" "ipv6 address 2001:DB8:0:1::2/64"',
-  'in CORE1 "interface Vlan10" "ipv6 address 2001:DB8:10::1/64"',
   'in CORE1 "interface Vlan10" "ip helper-address 10.255.0.1"',
   "ip HQ-EDGE G0/0/1 10.255.0.1/30",
   "up HQ-EDGE G0/0/1",

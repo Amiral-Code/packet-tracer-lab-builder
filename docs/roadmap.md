@@ -8,7 +8,8 @@ correct, graded fairly, hard to copy, pleasant to work in, and proven before any
 An iteration is done only when all of these hold:
 
 1. CI is green on Linux, macOS and Windows (Python 3.11 and 3.13).
-2. Every example passes `ptlab lint` with no errors, builds, and opens in Packet Tracer 9.0.1 (`tools/pt-open-test.sh`).
+2. Every example passes `ptlab lint` with no errors, builds, and survives the round trip: opened and saved by Packet
+   Tracer 9.0.1, then `ptlab verify SPEC SAVED.pka` reports every item and test kept and every local check passing.
 3. Every new Packet Tracer behaviour has been **seen working live**: an item turning green after a fix, a lock
    blocking what it should, a timer counting down. Until then it is listed as "pending live check" in
    `docs/packet-tracer-capabilities.md`, never as done.
@@ -46,8 +47,9 @@ The live checklist (one sitting, about 30 minutes, in `~/Study/labs/ccna/pt/work
 Then fix whatever fails, and add:
 
 - ~~An `examples/feature-probe.toml` lab~~ done: one 30-minute lab covering every remaining check.
-- An integration test that decodes every built example and checks its structure (no `<X />`, settings present,
-  every graded leaf has checkType 2 and a hint).
+- ~~Round-trip verification~~ done: `ptlab verify` plus a local hidden open-and-save script; all five examples pass
+  (it found and fixed: dropped `no switchport`, IPv6 rejected without the dual-stack SDM template, `ip route`'s
+  trailing space, colons in line items, leftover template port descriptions).
 
 ## Iteration 2: fairer grading
 

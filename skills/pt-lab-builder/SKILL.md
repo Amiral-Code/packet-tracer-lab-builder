@@ -43,6 +43,12 @@ against the lab's own grade statements, and **every fault, applied alone, makes 
 Fix every error; never use `--force` to ship a lab. Treat warnings as review items (for example, graded items
 that already pass at the start of a configure lab give free points).
 
+After building, when Packet Tracer is available, prove the file the way Packet Tracer reads it: open the built
+`.pka` in Packet Tracer, save it (Ctrl+S) as a copy, and run `ptlab verify SPEC SAVED.pka`. Packet Tracer silently
+drops assessment items it cannot find in its own answer network (already when it loads the file), so `verify`
+reports dropped items and connectivity tests, and runs the local checks on Packet Tracer's rewritten answer network.
+Fix every error before delivering the lab.
+
 Use `--open` only after telling the user that Packet Tracer will appear. Validate the generated file in a compatible Packet Tracer version when GUI access is available, and never terminate a Packet Tracer process the validation did not start.
 
 Deliver the `.pka` path, level/kind/time, covered topics, number of graded items, and answer-guide path. Tell the learner to open the answer guide only after a real attempt.
