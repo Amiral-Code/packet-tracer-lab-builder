@@ -51,6 +51,18 @@ class CoreTests(unittest.TestCase):
         self.assertNotIn(" switchport access vlan 10", out)
         self.assertNotIn(" no switchport access vlan 10", out)
 
+    def test_global_negation_does_not_shift_later_sections(self):
+        # "no ip routing" removes a global line; the interface edits after it must still land in their own blocks
+        answer = ["version 15.0", "ip routing", "interface GigabitEthernet0/1", " ip address 10.0.0.1 255.255.255.252",
+                  "interface Vlan10", " ip address 10.10.10.1 255.255.255.0", " ipv6 address 2001:DB8:10::1/64", "end"]
+        out = labgen.merge(answer, "no ip routing\ninterface Vlan10\n no ip address\n"
+                                   " no ipv6 address 2001:DB8:10::1/64\n shutdown\n")
+        g, v = out.index("interface GigabitEthernet0/1"), out.index("interface Vlan10")
+        self.assertEqual(out[g + 1], " ip address 10.0.0.1 255.255.255.252")
+        self.assertEqual(out[v + 1:v + 3], [" no ip address", " shutdown"])
+        self.assertNotIn(" ipv6 address 2001:DB8:10::1/64", out)
+        self.assertNotIn("ip routing", out)
+
     def test_data_directory_override(self):
         with tempfile.TemporaryDirectory() as directory:
             old = os.environ.get("PTLAB_DATA_DIR")

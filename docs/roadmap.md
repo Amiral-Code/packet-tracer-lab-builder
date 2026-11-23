@@ -53,14 +53,30 @@ Then fix whatever fails, and add:
 
 ## Iteration 2: fairer grading
 
-- **Several right answers:** `{{RegExMatch:…}}` items, e.g. `ip PC1 Fa0 any-in 192.168.10.0/24` and gateway
-  checks that accept any valid router address.
-- **IPv6:** `ip6 DEV IFACE ADDR/LEN`, `route6`, `ping6` (type-20 PDUs are in the corpus).
-- **More item types**, each only after a real file shows its value format: interface description, port security
-  (maximum, violation, sticky), DHCP pools, HSRP group/priority/preempt, OSPF passive interfaces and router ID,
-  ACL application per interface, NAT inside/outside.
-- **UDP/DNS tests** once a saved UDP PDU is found (build one in Packet Tracer and save it).
-- Lint: warn when a lab grades only configuration and no outcome, or only outcomes and no configuration.
+Built and proven by round trip (every item kept, every value equal to Packet Tracer's own):
+
+- ~~**Several right answers**~~ `{{RegEx:…}}` items (the real format; not `RegExMatch`): `ip DEV IFACE in NET/LEN`,
+  `gw HOST A|B`, `desc DEV IFACE ~word|any|TEXT`, `banner DEV ~word|any|TEXT`.
+- ~~**IPv6**~~ `ip6` (routers, switches, hosts), `gw6`, `route6`, IPv6 config lines (`:` stored as `-` in item IDs),
+  `ping6` (type-20 PDU), host IPv6 from a second addressing row. Northstar grades its IPv6 again.
+- ~~**More item types**~~ each from a real file and checked against Packet Tracer's own value: description, banner,
+  port security (enabled, maximum, sticky, violation), PortFast, NAT inside/outside, ACL per interface, HSRP,
+  DHCP pools, OSPF router ID and passive interfaces, enable secret, local users.
+- ~~`ptlab verify --values`~~ with `ptlab bare`: proves every item's value against Packet Tracer itself.
+- ~~Lint~~ warns when a lab grades only configuration or only outcomes; accepts link-local and HSRP gateways.
+- Fixed on the way: start overlays after a global `no …` line landed in the wrong section (Northstar's CORE1 start
+  network), `no ip address` did not remove the address, `in` parents with short interface names never matched.
+
+Live checklist (`feature-probe-2.pka`, about 30 minutes):
+
+| Check | Pass when |
+|---|---|
+| Several right answers | PC1 with any address in 192.168.10.0/24 (not .10) and either gateway: IP Address and Default Gateway green |
+| Description / banner wording | your own wording that mentions "LAN" / "authorized": green |
+| IPv6 items and ping6 | all IPv6 items green, Connectivity Tests 2/2 |
+| Port security, NAT, HSRP, DHCP pool, secrets | each item green after configuring it |
+
+Still open: **UDP/DNS tests** need a saved UDP PDU (build one in Packet Tracer and save it).
 
 ## Iteration 3: devices and modules
 

@@ -54,6 +54,12 @@ def parser() -> argparse.ArgumentParser:
     verify = sub.add_parser("verify", help="compare a lab with the same activity after Packet Tracer opened and saved it")
     verify.add_argument("spec", type=Path)
     verify.add_argument("saved", type=Path, help="the built .pka, opened in Packet Tracer and saved (Ctrl+S)")
+    verify.add_argument("--values", type=Path, metavar="BARE_SAVED",
+                        help="also compare every item's value with Packet Tracer's own: a `ptlab bare` copy of the "
+                             "built .pka, opened and saved in Packet Tracer")
+    bare = sub.add_parser("bare", help="copy a built .pka without its assessment items (for verify --values)")
+    bare.add_argument("built", type=Path)
+    bare.add_argument("output", type=Path)
     sub.add_parser("doctor", help="show whether the local installation is ready")
     sub.add_parser("models", help="list locally available Packet Tracer device model keys")
     return p
@@ -86,7 +92,17 @@ def main(argv: list[str] | None = None) -> int:
                           f"{n['tests']}, local checks on Packet Tracer's answer {n['local']}/{n['local_total']})")
         else:
             issues.report("verify")
-        return 1 if issues.errors else 0
+        failed = bool(issues.errors)
+        if args.values:
+            issues, n = validate.verify_values(labgen.load_spec(str(args.spec)), str(args.values))
+            issues.report(f"values (same as Packet Tracer's own: {n['same']}/{n['items']})")
+            failed = failed or bool(issues.errors)
+        return 1 if failed else 0
+    if args.command == "bare":
+        from . import validate
+        validate.strip_assessment(str(args.built), str(args.output))
+        print(f"wrote {args.output}: open it in Packet Tracer, save, then ptlab verify SPEC SAVED --values {args.output}")
+        return 0
     if args.command == "models":
         return library.list_models()
     raise AssertionError(args.command)

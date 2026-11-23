@@ -18,10 +18,14 @@ Write original scenarios, instructions, topologies, and faults. Do not copy NetA
 
 For the TOML structure, grading statements, device/link rules, and known serialization invariants, read [references/spec-schema.md](references/spec-schema.md). When the request includes a Physical workspace or physical cabling, also read [references/physical-mode.md](references/physical-mode.md).
 
-Grade with the most specific statement (`access`, `trunk`, `vlan`, `route`, `ospf`, `stp`, `ip`, `up`, `gw`) and use
-`line` only for unindented running-config lines; anything inside a section needs `in DEV "PARENT" "LINE"`.
-Add connectivity tests for the outcomes the lab is about, on top of the config items: `ping` for reachability and
-`http`/`https`/`ssh`/`telnet` or `tcp ... PORT` for service policy. Use `fail` for traffic that must be blocked.
+Grade with the most specific statement (`access`, `trunk`, `vlan`, `route`, `ospf`, `stp`, `ip`, `up`, `gw`, and
+`ip6`, `gw6`, `route6`, `rid`, `passive`, `portfast`, `portsec`, `desc`, `banner`, `nat`, `acl`, `hsrp`, `pool`,
+`secret`, `user`) and use `line` only for unindented running-config lines; anything inside a section needs
+`in DEV "PARENT" "LINE"`. When the task leaves the student a choice, grade the choice, not one answer:
+`ip DEV IFACE in NET/LEN` (any host address), `gw HOST A|B` (either gateway), `desc DEV IFACE ~word` or `any`,
+`banner DEV ~word`. IPv6 is fully supported, including hosts (a second addressing row) and `ping6`.
+Add connectivity tests for the outcomes the lab is about, on top of the config items: `ping`/`ping6` for reachability
+and `http`/`https`/`ssh`/`telnet` or `tcp ... PORT` for service policy. Use `fail` for traffic that must be blocked.
 Do not invent UDP/DNS saved-PDU encodings; they are not supported yet.
 When the request calls for weighted or partial credit, map exact statements under `[grade.points]`; keep ordinary
 items at one point and give larger weights only to outcomes that genuinely deserve more influence.
@@ -47,6 +51,8 @@ After building, when Packet Tracer is available, prove the file the way Packet T
 `.pka` in Packet Tracer, save it (Ctrl+S) as a copy, and run `ptlab verify SPEC SAVED.pka`. Packet Tracer silently
 drops assessment items it cannot find in its own answer network (already when it loads the file), so `verify`
 reports dropped items and connectivity tests, and runs the local checks on Packet Tracer's rewritten answer network.
+To also prove every item's value, make a copy without assessment items (`ptlab bare BUILT.pka BARE.pka`), open and
+save it the same way, and add `--values BARE.pka`: Packet Tracer fills that copy's tree from its own answer network.
 Fix every error before delivering the lab.
 
 Use `--open` only after telling the user that Packet Tracer will appear. Validate the generated file in a compatible Packet Tracer version when GUI access is available, and never terminate a Packet Tracer process the validation did not start.

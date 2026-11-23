@@ -62,6 +62,20 @@ ptlab models
 
 `ptlab lint` checks the spec (ports, cabling, addressing, gateways, grade statements) and then proves the lab against itself: the answer network must score 100 % on the lab's own grade statements, and every hidden fault, applied alone, must make at least one graded item fail. `ptlab build` runs the same checks first and refuses to write a lab that fails them (`--force` overrides). The build command writes the activity and an `-answer.md` guide. Generated files and the private template library are intentionally ignored by Git.
 
+Grading is native Packet Tracer Check Results: addresses (IPv4 and IPv6), interface state, gateways, VLANs and
+trunks, static/OSPF routing, port security, PortFast, NAT, ACL placement, HSRP, DHCP pools, enable secrets, local
+users, banners, descriptions, any running-config line, cables, and connectivity tests (ping, ping6, TCP services,
+including traffic that must be blocked). Where a task leaves a choice, items accept every right answer: any host
+address in a subnet, either of two gateways, a description that mentions a word.
+
+Prove a built lab the way Packet Tracer reads it: open it in Packet Tracer, save a copy, then
+
+```bash
+ptlab verify SPEC.toml SAVED.pka                        # items and tests Packet Tracer kept, local checks
+ptlab bare work/lab.pka work/lab-bare.pka               # open + save this copy too, then:
+ptlab verify SPEC.toml SAVED.pka --values work/lab-bare.pka   # every value equals Packet Tracer's own
+```
+
 Use source files from the same Packet Tracer generation your learners use. A `.pka` generated from newer device templates may not open in an older Packet Tracer release.
 
 ## Install the AI skill

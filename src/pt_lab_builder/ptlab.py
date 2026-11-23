@@ -141,13 +141,40 @@ def set_pc(dev, s):
     g = dev.find("ENGINE/GATEWAY")
     if g is not None:
         g.text = "" if dhcp else s.get("gw", "")
+    if "ip6" in s or "gw6" in s:
+        _set_pc_v6(dev, p, s.get("ip6", []), s.get("gw6", ""))
+
+
+def _sub(parent, tag):
+    e = parent.find(tag)
+    return e if e is not None else ET.SubElement(parent, tag)
+
+
+def _set_pc_v6(dev, port, addresses, gw6):
+    """Static IPv6 the way a saved host stores it: PORT/IPV6_ADDRESSES/IPV6_ADDRESS (ADDRESS, PREFIX, TYPE 0),
+    the gateway in PORT/IPV6_PORT_GATEWAY and ENGINE/GATEWAYV6 (seen in a real activity's answer network)."""
+    box = _sub(port, "IPV6_ADDRESSES")
+    for old in list(box):
+        box.remove(old)
+    for a in addresses:          # "2001:DB8:1::10/64"
+        addr, prefix = a.split("/")
+        e = ET.SubElement(box, "IPV6_ADDRESS")
+        ET.SubElement(e, "ADDRESS").text = addr
+        ET.SubElement(e, "PREFIX").text = prefix
+        ET.SubElement(e, "TYPE").text = "0"
+    _sub(port, "IPV6_PORT_GATEWAY").text = gw6
+    eng = dev.find("ENGINE")
+    if eng is not None:
+        _sub(eng, "GATEWAYV6").text = gw6
 
 
 def get_pc(dev):
     p = pc_port(dev)
     gw = (p.findtext("PORT_GATEWAY") or "") or (dev.findtext("ENGINE/GATEWAY") or "")
+    ip6 = [f"{e.findtext('ADDRESS')}/{e.findtext('PREFIX')}".upper() for e in p.findall("IPV6_ADDRESSES/IPV6_ADDRESS")]
+    gw6 = (p.findtext("IPV6_PORT_GATEWAY") or "") or (dev.findtext("ENGINE/GATEWAYV6") or "")
     return {"ip": p.findtext("IP") or "", "mask": p.findtext("SUBNET") or "", "gw": gw,
-            "dhcp": (p.findtext("PORT_DHCP_ENABLE") or "false") == "true"}
+            "dhcp": (p.findtext("PORT_DHCP_ENABLE") or "false") == "true", "ip6": ip6, "gw6": gw6.upper()}
 
 
 # ---------------------------------------------------------------- grading
@@ -192,14 +219,20 @@ def run_check(c, devs, links=None):
     d = devs.get(c["device"])
     if d is None:
         return False
-    if any(k in c for k in ("ip", "mask", "gw", "dhcp", "ip_in")):
+    if any(k in c for k in ("ip", "mask", "gw", "dhcp", "ip_in", "ip6", "gw6")):
         s = get_pc(d)
-        for k in ("ip", "mask", "gw"):
+        for k in ("ip", "mask"):
             if k in c and s[k] != c[k]:
                 return False
+        if "gw" in c and s["gw"] not in c["gw"].split("|"):
+            return False
         if "dhcp" in c and s["dhcp"] != c["dhcp"]:
             return False
-        if "ip_in" in c and not s["ip"].startswith(c["ip_in"]):
+        if "ip_in" in c and not _host_in(s["ip"], c["ip_in"]):
+            return False
+        if "ip6" in c and c["ip6"].upper() not in s["ip6"]:
+            return False
+        if "gw6" in c and s["gw6"] != c["gw6"].upper():
             return False
         return True
     if "vlan" in c:  # VLANs live in vlan.dat: the saved VLANS element, or config text not yet re-parsed
@@ -209,6 +242,8 @@ def run_check(c, devs, links=None):
                 return v.get("name") == name
         bl = blocks(get_config(d))
         return f"name {name}" in bl.get(f"vlan {num}", [])
+    if "banner" in c:  # the MOTD text between its delimiters, possibly over several lines
+        return bool(re.search(c["banner"], banner_text(get_config(d)), re.I | re.S))
     bl = blocks(get_config(d))
     if c.get("top"):  # an unindented line (Packet Tracer matches whole lines, not sub-commands)
         return all(any(re.fullmatch(rx, l, re.I) for l in bl["GLOBAL"]) for rx in c.get("has", []))
@@ -229,6 +264,31 @@ def run_check(c, devs, links=None):
         if any(re.fullmatch(rx, l, re.I) for l in scope):
             return False
     return True
+
+
+def banner_text(lines):
+    """The MOTD banner of a running-config: 'banner motd ^CText^C' (one or several lines) -> 'Text'."""
+    for i, line in enumerate(lines):
+        if line.startswith("banner motd "):
+            rest = line[len("banner motd "):].lstrip()
+            delim = "^C" if rest.startswith("^C") else rest[:1]
+            body = rest[len(delim):]
+            j = i
+            while delim not in body and j + 1 < len(lines):
+                j += 1
+                body += "\n" + lines[j]
+            return body.split(delim)[0]
+    return ""
+
+
+def _host_in(ip, net):
+    """ip is a usable host address of net ('192.168.10.0/24')."""
+    import ipaddress
+    try:
+        a, n = ipaddress.ip_address(ip), ipaddress.ip_network(net)
+    except ValueError:
+        return False
+    return a in n and (n.prefixlen >= 31 or a not in (n.network_address, n.broadcast_address))
 
 
 def grade(a, tree, checks=None, quiet=False):
@@ -291,6 +351,28 @@ PKA_KINDS = {
     "vlan_name": (["VLANS", "{vlan}"], "VLAN Name", "VLAN Name", "5", "Switching"),
     "access_vlan": (["Ports", "{port}"], "Access VLAN", "Access VLAN", "5", "Switching"),
     "native_vlan": (["Ports", "{port}"], "Native VLAN", "Native VLAN", "5", "Switching"),
+    # paths and value formats below were each read from graded items of real activities (see research-evidence.md)
+    "ip6_addr": (["Ports", "{port}", "Ipv6 Address", "{addr}"], "IP Address", "IP Address", "0", "Ip"),
+    "ip6_prefix": (["Ports", "{port}", "Ipv6 Address", "{addr}"], "Prefix Length", "Prefix", "0", "Ip"),
+    "gw6": ([], "Default Gateway IPv6", "Default Gateway IPv6", "0", "Ip"),
+    "description": (["Ports", "{port}"], "Description", "Description", "8", "Other"),
+    "banner": ([], "Banner MOTD", "Banner motd", "8", "Other"),
+    "nat": (["Ports", "{port}"], "NAT Mode", "NAT", "3", "Routing"),              # 1 inside, 2 outside
+    "acl_in": (["Ports", "{port}"], "Access-group In", "Access-group In", "2", "Other"),
+    "acl_out": (["Ports", "{port}"], "Access-group Out", "Access-group Out", "2", "Other"),
+    "psec_on": (["Ports", "{port}", "Port Security"], "Enabled", "Enabled", "8", "Switching"),
+    "psec_max": (["Ports", "{port}", "Port Security"], "Max Secure Mac", "Max Secure Mac", "8", "Switching"),
+    "psec_sticky": (["Ports", "{port}", "Port Security"], "Sticky Enabled", "Sticky Enabled", "8", "Switching"),
+    "psec_violation": (["Ports", "{port}", "Port Security"], "Port Security Violation", "Violation", "8",
+                       "Switching"),                                              # 0 shutdown, 2 restrict
+    "portfast": (["Ports", "{port}"], "PortFast", "PortFast", "5", "Switching"),
+    "enable_secret": ([], "Enable Secret", "Enable Secret", "8", "Other"),       # value: md5crypt, salt mERr
+    "username": (["User Names"], "Username", "{user}", "8", "Other"),            # value: "NAME HASH"
+    "pool_name": (["DHCP Server", "Pools", "{pool}"], "Name", "Name", "0", "Ip"),
+    "pool_start": (["DHCP Server", "Pools", "{pool}"], "Start IP address", "Start IP address", "0", "Ip"),
+    "pool_mask": (["DHCP Server", "Pools", "{pool}"], "Subnet mask", "Subnet mask", "0", "Ip"),
+    "pool_gw": (["DHCP Server", "Pools", "{pool}"], "Default Gateway", "Default Gateway", "0", "Ip"),
+    "pool_dns": (["DHCP Server", "Pools", "{pool}"], "DNS Server", "DNS Server", "0", "Ip"),
 }
 
 
@@ -301,11 +383,13 @@ def comparisons(items):
     line_no = {}
     for it in items:
         path, name, nid, eclass, comp = PKA_KINDS[it["kind"]]
+        nid = nid.format(**it)
         cur = _child(root, it["device"])
         for part in path:
             cur = _child(cur, part.format(**it))
         value = {"port_on": "1"}.get(it["kind"], it.get("value", ""))
-        variable = ""
+        # several right answers: Packet Tracer matches the student's value against {{RegEx:PATTERN}} instead
+        variable = "{{RegEx:%s}}" % it["regex"] if it.get("regex") else ""
         if it["kind"] == "config_line":
             line_no[it["device"]] = line_no.get(it["device"], 0) + 1
             name = nid = name.format(n=line_no[it["device"]])
@@ -361,6 +445,38 @@ def instructions_html(a):
 # Activity Wizard password: CActivityWizard::m_enablePassBtn_clicked hashes Util::md5Digest(SALT, utf8(password))
 # = MD5(SALT + password), upper-case hex, into ACTIVITY PASS; real files also carry the salt in ACTIVITY VALUE.
 # Verified: this reproduces the PASS of a real NetAcad activity from its known password.
+_CRYPT64 = "./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+IOS_SECRET_SALT = "mERr"   # every "enable secret"/"username ... secret" hash in real activities uses this salt
+
+
+def md5crypt(password, salt=IOS_SECRET_SALT):
+    """IOS type-5 secret ($1$, FreeBSD MD5-crypt). With Packet Tracer's fixed salt this reproduces the
+    Enable Secret values of real activities (e.g. "class" -> $1$mERr$9cTjUIEqNGurQiFU.ZeCi1)."""
+    import hashlib
+    pw, sb, magic = password.encode(), salt.encode(), b"$1$"
+    alt = hashlib.md5(pw + sb + pw).digest()
+    ctx = pw + magic + sb + (alt * (len(pw) // 16 + 1))[:len(pw)]
+    i = len(pw)
+    while i:
+        ctx += b"\0" if i & 1 else pw[:1]
+        i >>= 1
+    fin = hashlib.md5(ctx).digest()
+    for i in range(1000):
+        fin = hashlib.md5((pw if i & 1 else fin) + (sb if i % 3 else b"") + (pw if i % 7 else b"")
+                          + (fin if i & 1 else pw)).digest()
+    out = ""
+    for a, b, c in ((0, 6, 12), (1, 7, 13), (2, 8, 14), (3, 9, 15), (4, 10, 5)):
+        v = (fin[a] << 16) | (fin[b] << 8) | fin[c]
+        for _ in range(4):
+            out += _CRYPT64[v & 63]
+            v >>= 6
+    v = fin[11]
+    for _ in range(2):
+        out += _CRYPT64[v & 63]
+        v >>= 6
+    return f"$1${salt}${out}"
+
+
 PASSWORD_SALT = bytes.fromhex("c0a801be79392311a09bc602")
 # CActivityFile timer type (ACTIVITY TIMERTYPE, stored unchanged in field 0x330): the activity window draws
 # "Time Elapsed" for 0 and "Time Left" (countdown) for 1, and no timer for anything else.
@@ -580,19 +696,19 @@ def add_connectivity_tests(answer_tree, tests):
         pdu = ET.SubElement(scen, "PDU")
         if protocol == "tcp":
             ET.SubElement(pdu, "TYPE", {"name": "", "start": "3000", "patterned": "yes"}).text = "1"
-        else:
-            ET.SubElement(pdu, "TYPE", {"patterned": "no"}).text = "0"
+        else:   # 0 = ICMP echo, 20 = ICMPv6 echo (same nested CIpHeader/CIcmpMessage, IPv6 addresses)
+            ET.SubElement(pdu, "TYPE", {"patterned": "no"}).text = "20" if protocol == "icmp6" else "0"
         ET.SubElement(pdu, "CUSTOM_TYPE")
         ET.SubElement(pdu, "SOURCE").text = devs[t["src"]].findtext("ENGINE/SAVE_REF_ID")
         ET.SubElement(pdu, "PORT")
-        if protocol == "tcp":
+        if protocol in ("tcp", "icmp6"):
             ET.SubElement(pdu, "DESTINATION").text = t["ip"]
         else:
             ET.SubElement(pdu, "DESTINATION", {"device": devs[t["dst"]].findtext("ENGINE/SAVE_REF_ID")})
         ET.SubElement(pdu, "COLOR").text = "-8664361" if t["succeed"] else "-3394765"
         ip = ET.SubElement(pdu, "PDU")
         ET.SubElement(ip, "TYPE").text = "CIpHeader"
-        ET.SubElement(ip, "SRCADDR").text = t.get("src_ip", "") if protocol == "tcp" else ""
+        ET.SubElement(ip, "SRCADDR").text = t.get("src_ip", "") if protocol in ("tcp", "icmp6") else ""
         ET.SubElement(ip, "DSTADDR").text = t["ip"]
         ET.SubElement(ip, "PROTOCOL")
         ET.SubElement(ip, "TTL").text = "32" if protocol == "tcp" else "255"

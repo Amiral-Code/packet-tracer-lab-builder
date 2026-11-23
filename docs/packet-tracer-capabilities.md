@@ -15,11 +15,11 @@ not yet confirmed live; **open** = available in Packet Tracer, not used yet.
 |---|---|---|---|
 | Three networks | student, initial (Reset Activity), answer | `PACKETTRACER5` ×3, in that order | used |
 | Instruction pages | multi-page HTML with Back/Next | `ACTIVITY/INSTRUCTIONS/PAGE` | used |
-| Assessment tree | compares chosen settings of the student's network with the answer network (149 node classes, see below) | `COMPARISONS` (checkType 2 on graded leaves, 1 on their branches) | used: IP/mask, Port Up, gateway, hostname, VLAN name, access/native VLAN, config lines (`LINES` nodes) |
+| Assessment tree | compares chosen settings of the student's network with the answer network (149 node classes, see below) | `COMPARISONS` (checkType 2 on graded leaves, 1 on their branches) | used: IP/mask, IPv6 address/prefix, Port Up, gateways (v4/v6), hostname, VLAN name, access/native VLAN, description, banner, NAT side, access-group, port security, PortFast, DHCP pools, enable secret, users, config lines (`LINES` nodes, IPv6 included); new kinds pass the round trip with values identical to Packet Tracer's own, live Check Results pending |
 | Points and components per item | weight items; group the score by Ip/Routing/Switching/Physical/Other | `POINTS`, `COMPONENTS` | used: configurable positive integer weights per statement |
 | Per-item feedback | a hint shown next to each **incorrect** item in Check Results | `NAME incorrectFeedback` | used: automatic and per-item overrides |
-| Connectivity tests | Realtime PDUs sent at Check Results, expected to succeed or fail | PDUs in the answer network's first scenario, `TEST_CONDITION` 3/2 | used (ping) |
-| Complex-PDU tests | the same with a TCP PDU to a port (HTTP 80, HTTPS 443, SSH 22, Telnet 23, or explicit port) | same scenario, complex PDU | built from observed TCP encodings; live outcome confirmation pending; UDP/DNS unknown |
+| Connectivity tests | Realtime PDUs sent at Check Results, expected to succeed or fail | PDUs in the answer network's first scenario, `TEST_CONDITION` 3/2 | used (ping); ping6 (type 20) built, live pending |
+| Complex-PDU tests | the same with a TCP PDU to a port (HTTP 80, HTTPS 443, SSH 22, Telnet 23, or explicit port) | same scenario, complex PDU | used: HTTP pass and HTTPS blocked confirmed live; UDP/DNS unknown |
 | Overall feedback | message when complete / incomplete (HTML) | `OVERALL_COMPLETE_FEEDBACK`, `OVERALL_INCOMPLETE_FEEDBACK` | used (generic); custom per-lab text built |
 | Dynamic feedback | live "Completion: x %" while working | `DYNAMIC_PERCENTAGE_FEEDBACK` | used |
 | Timer | elapsed time, a countdown limit, or none | `ACTIVITY TIMERTYPE` (0 elapsed, 1 countdown, 2 none), `COUNTDOWNMS`, `COUNTDOWNLEFT` | used: countdown confirmed live (Time Left); expiry behaviour pending |
@@ -30,7 +30,7 @@ not yet confirmed live; **open** = available in Packet Tracer, not used yet.
 | Initial network setup | alternative starting values for chosen items | `INITIALSETUP` | open |
 | Object location sets | several logical layouts, picked at random or by variable | `OBJECT_LOCATIONS` | open |
 | Variable Manager | seed/number/string/IP pools: per-student random names and addressing; "Entire Range" accepts any pool value as correct | `VARIABLE_MANAGER` | open: anti-copying, like `lab pt mystery` |
-| Regular-expression items | `{{RegExMatch:…}}` instead of a fixed value (e.g. any host address in a subnet) | item `variableName` | open |
+| Regular-expression items | `{{RegEx:…}}` instead of a fixed value (any host address in a subnet, either gateway, a description mentioning a word) | item `variableName`, `variableEnabled="true"` | built: `ip … in`, `gw A\|B`, `desc`, `banner`; kept by Packet Tracer, live pending |
 | Config-line scripts | `{{DeviceConfig.isInConfig:LINE}}`, `isInConfigParent:PARENT:LINE` (exact whole-line match, from the bundled `Ext.AssessmentModel.DeviceConfig.js`) | item `variableName` | known; `LINES` nodes are used instead |
 | Scoring model and scripting | evidence-centred design: JavaScript rules combining items into partial credit and custom feedback ("2 of 3 routers addressed") | `SCRIPT_MODULE`, proficiency model | open, larger |
 | Script modules | `.pts` extensions with their own UI and data store | `SCRIPT_MODULE_MANAGER` | open, larger |
@@ -100,7 +100,7 @@ scenarios. An activity can start in Simulation mode (locking tree) for "watch an
    custom overall feedback, and TCP allow/deny outcomes in Packet Tracer 9.0.1.
 2. **Extend locking controls:** live-confirm current presets, then add a `cabling` preset that starts inside the
    intended wiring closet without depending on unstable source-template UUIDs.
-3. **Flexible answers:** `RegExMatch` items such as "any host address in 192.168.10.0/24".
+3. **Flexible answers:** done in iteration 2 (`{{RegEx:…}}`); confirm live.
 4. **More models and modules:** ASA 5505/5506-X, 2950, sniffer, home router, cell tower; serial and switch
    modules for WAN labs.
 5. **Per-student variants:** Variable Manager pools for addressing and names.

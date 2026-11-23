@@ -262,6 +262,8 @@ def lint(spec) -> Issues:
             nets.append((n, dev, iface))
             if not iface.startswith(NON_PHYSICAL) and "." not in iface and (dev, iface) not in cabled:
                 issues.warn(f"addressing: {dev} {row[1]} has an address but no cable")
+    virtual = {st.split()[4] for st in spec.get("grade", {}).get("items", []) if st.split()[:1] == ["hsrp"]
+               and len(st.split()) > 4}
     for row in labgen.addressing_rows(spec):
         if len(row) < 4 or not row[3] or row[0] not in model or not row[2] or row[2].lower() == "dhcp":
             continue
@@ -271,8 +273,14 @@ def lint(spec) -> Issues:
         except ValueError:
             issues.error(f"addressing: {dev}: gateway {gw!r} is not an address")
             continue
-        if g not in n.network:
+        if g.version != n.version:
+            issues.error(f"addressing: {dev} gateway {gw} and address {cidr} are different IP versions")
+        elif g not in n.network and not (g.version == 6 and g.is_link_local):
             issues.error(f"addressing: {dev} gateway {gw} is outside its subnet {n.network}")
+        elif g.version == 6 and g.is_link_local:
+            pass                     # a router's link-local address: set in its config, not in the table
+        elif str(g) in virtual:
+            pass                     # an HSRP virtual address
         elif str(g) not in addrs:
             issues.warn(f"addressing: {dev} gateway {gw} is not any device's address in the table")
 
@@ -290,7 +298,11 @@ def lint(spec) -> Issues:
         if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
             issues.error(f"[grade.points] {statement!r} must be a positive integer")
     table = {(r[0], labgen.long_if(r[1])): r[2] for r in labgen.addressing_rows(spec) if len(r) >= 3}
-    first_addr = {r[0] for r in labgen.addressing_rows(spec) if len(r) >= 3 and r[2] and r[2].lower() != "dhcp"}
+    try:
+        first4, first6 = labgen.first_addresses(spec)
+    except ValueError:
+        first4, first6 = {}, {}
+    first_addr, first_addr6 = set(first4), set(first6)
     for st in statements:
         w = st.split()
         if not w or w[0] not in labgen.GRADE_STATEMENTS:
@@ -299,19 +311,29 @@ def lint(spec) -> Issues:
         if len(w) < 2 or w[1] not in model:
             issues.error(f"grade: {st!r}: unknown device")
             continue
-        problem = _statement_problem(w, st, model, ports, first_addr)
+        problem = _statement_problem(w, st, model, ports, first_addr, first_addr6)
         if problem:
             issues.error(f"grade: {st!r}: {problem}")
             continue
-        if w[0] in ("ip", "up"):
+        if w[0] in ("ip", "up", "ip6"):
             if len(w) < 3:
                 issues.error(f"grade: {st!r}: missing interface")
                 continue
             iface = labgen.long_if(w[2])
             if not _port_ok(ports[w[1]], iface):
                 issues.error(f"grade: {st!r}: {w[1]} has no port {iface}")
-            if w[0] == "ip" and (w[1], iface) in table and len(w) > 3 and table[(w[1], iface)] != w[3]:
+            if w[0] == "ip" and (w[1], iface) in table and len(w) == 4 and table[(w[1], iface)] != w[3]:
                 issues.warn(f"grade: {st!r} differs from the addressing table ({table[(w[1], iface)]})")
+
+    # balance: configuration items say what was typed, outcome tests say whether it works; a lab needs both
+    kinds = [st.split()[0] for st in statements if st.split()]
+    outcome = [k for k in kinds if k in labgen.CONNECTIVITY_STATEMENTS]
+    config = [k for k in kinds if k not in labgen.CONNECTIVITY_STATEMENTS and k not in ("up", "cable")]
+    if statements and not outcome:
+        issues.warn("grade: only configuration is graded; add ping/tcp tests so a working network is also proven")
+    elif statements and not config and not any(lk.get("student") for lk in spec.get("link", [])):
+        issues.warn("grade: only outcomes are graded; add configuration items so partial work earns partial credit "
+                    "and Check Results can point at what is wrong")
 
     # faults
     for i, f in enumerate(spec.get("fault", []), 1):
@@ -327,13 +349,21 @@ def lint(spec) -> Issues:
     return issues
 
 
-def _statement_problem(w, st, model, ports, first_addr):
+def _statement_problem(w, st, model, ports, first_addr, first_addr6=()):
     """Shape errors for one grade statement, or None."""
     k = w[0]
-    need = {"ip": 4, "up": 3, "gw": 3, "hostname": 3, "dhcp": 2, "vlan": 4, "access": 4, "route": 4,
-            "ospf": 5, "stp": 4, "cable": 5}
+    need = {"ip": 5 if len(w) > 3 and w[3] == "in" else 4, "ip6": 4, "up": 3, "gw": 3, "gw6": 3, "hostname": 3,
+            "dhcp": 2, "vlan": 4, "access": 4, "route": 4, "route6": 4, "ospf": 5, "rid": 4, "passive": 4, "stp": 4,
+            "portfast": 3, "nat": 4, "acl": 5, "cable": 5}
     if k in need and len(w) != need[k]:
         return f"expects {need[k] - 1} fields after '{k}'"
+    host = labgen.ptbuild_model_is_host(model.get(w[1], ""))
+    ios_only = ("route", "route6", "ospf", "rid", "passive", "stp", "portfast", "portsec", "nat", "acl", "hsrp",
+                "pool", "secret", "user", "banner", "desc", "vlan", "access", "trunk", "line", "in", "hostname")
+    if host and k in ios_only:
+        return f"{w[1]} is a host; '{k}' grades IOS configuration"
+    if not host and k in ("gw", "gw6", "dhcp"):
+        return f"{w[1]} is not a host; '{k}' grades a PC/server setting"
     try:
         if k == "line" and len(w) < 3:
             return "missing the config line"
@@ -341,10 +371,75 @@ def _statement_problem(w, st, model, ports, first_addr):
             parts = shlex.split(st)
             if len(parts) != 4:
                 return 'write it as: in DEV "PARENT LINE" "SUB-COMMAND" (quote both)'
-        if k in ("line", "in") and ":" in st.split(None, 2)[2]:
-            # every config-line item containing ':' (IPv6 addresses) was dropped by Packet Tracer at load, while the
-            # same lines without ':' were kept; ':' separates Packet Tracer's assessment paths
-            return "Packet Tracer silently drops config-line items containing ':' (IPv6); grade IPv6 another way"
+        if k == "ip" and len(w) == 5:
+            ipaddress.ip_network(w[4], strict=True)
+        elif k == "ip":
+            ipaddress.ip_interface(w[3])
+        if k in ("ip6", "gw6", "route6"):
+            if k == "ip6" and ipaddress.ip_interface(w[3]).version != 6:
+                return "needs an IPv6 address/prefix"
+            if k == "gw6":
+                ipaddress.IPv6Address(w[2])
+            if k == "route6":
+                ipaddress.IPv6Network(w[2], strict=True)
+        if k == "gw":
+            for a in w[2].split("|"):
+                ipaddress.IPv4Address(a)
+        if k in ("ip", "ip6", "portfast", "portsec", "desc", "nat", "acl", "hsrp") and len(w) > 2:
+            if not _port_ok(ports[w[1]], labgen.long_if(w[2])):
+                return f"{w[1]} has no port {labgen.long_if(w[2])}"
+        if k == "rid":
+            int(w[2]); ipaddress.IPv4Address(w[3])
+        if k == "passive":
+            int(w[2])
+        if k == "portsec":
+            opts = w[3:]
+            i = 0
+            while i < len(opts):
+                if opts[i] == "max":
+                    if not 1 <= int(opts[i + 1]) <= 8192:
+                        return "max must be 1-8192"
+                    i += 2
+                elif opts[i] == "violation":
+                    if opts[i + 1] not in ("protect", "restrict", "shutdown"):
+                        return "violation is protect, restrict or shutdown"
+                    i += 2
+                elif opts[i] == "sticky":
+                    i += 1
+                else:
+                    return "options are: max N, sticky, violation protect|restrict|shutdown"
+        if k in ("desc", "banner"):
+            text = " ".join(shlex.split(st)[3 if k == "desc" else 2:])
+            if not text:
+                return "give the text, ~word (contains, any case) or any (not blank)"
+        if k == "nat" and w[3] not in ("inside", "outside"):
+            return "write it as: nat DEV IFACE inside|outside"
+        if k == "acl" and w[4] not in ("in", "out"):
+            return "write it as: acl DEV IFACE NAME in|out"
+        if k == "hsrp":
+            if len(w) < 5:
+                return "write it as: hsrp DEV IFACE GROUP VIP [priority N] [preempt]"
+            if not 0 <= int(w[3]) <= 4095:
+                return "HSRP group must be 0-4095"
+            ipaddress.IPv4Address(w[4])
+            rest = w[5:]
+            if "priority" in rest:
+                if not 0 <= int(rest[rest.index("priority") + 1]) <= 255:
+                    return "priority must be 0-255"
+            if [x for x in rest if x not in ("priority", "preempt") and not x.isdigit()]:
+                return "options are: priority N, preempt"
+        if k == "pool":
+            if len(w) < 4 or len(w) % 2:
+                return "write it as: pool DEV NAME NET/LEN [gw A.B.C.D] [dns A.B.C.D]"
+            ipaddress.ip_network(w[3], strict=True)
+            for key, val in zip(w[4::2], w[5::2]):
+                if key not in ("gw", "dns"):
+                    return "options are: gw A.B.C.D, dns A.B.C.D"
+                ipaddress.IPv4Address(val)
+        if k == "secret" and len(shlex.split(st)) != 3:
+            return "write it as: secret DEV PASSWORD"
+        if k == "user" and len(shlex.split(st)) != 4:
+            return "write it as: user DEV NAME PASSWORD"
         if k in ("vlan", "access") and not 1 <= int(w[2 if k == "vlan" else 3]) <= 4094:
             return "VLAN must be 1-4094"
         if k in ("access", "trunk"):
@@ -390,9 +485,14 @@ def _statement_problem(w, st, model, ports, first_addr):
             if len(addresses) > 1:
                 return f"write it as: {syntax}"
             if addresses:
-                ipaddress.ip_address(addresses[0])
+                (ipaddress.IPv6Address if k == "ping6" else ipaddress.IPv4Address)(addresses[0])
+            elif k == "ping6":
+                if w[2] not in first_addr6:
+                    return f"{w[2]} has no IPv6 address in the addressing table: add the destination address"
             elif w[2] not in first_addr:
                 return f"{w[2]} has no address in the addressing table: add the destination address"
+            if k == "ping6" and w[1] not in first_addr6:
+                return f"{w[1]} has no IPv6 address in the addressing table: ICMPv6 tests need a source address"
             if k != "ping" and w[1] not in first_addr:
                 return f"{w[1]} has no address in the addressing table: TCP tests need a source address"
     except ValueError as e:
@@ -437,21 +537,22 @@ def selfcheck(spec) -> Issues:
     return issues, sum(answer), len(answer), sum(start)
 
 
-def graded_paths(comparisons_root):
-    """Paths (device > ... > item ID) of every graded leaf (checkType 2) under a COMPARISONS/NODE tree."""
-    out = []
+def graded_paths(comparisons_root, values=False):
+    """Paths (device > ... > item ID) of every graded leaf (checkType 2) under a COMPARISONS/NODE tree;
+    with values=True a {path: (nodeValue, variableName)} dict."""
+    out = {}
 
     def walk(node, path):
         here = path + [node.findtext("ID") or ""]
         name = node.find("NAME")
         if name is not None and name.get("checkType") == "2":
-            out.append(" > ".join(here[1:]))
+            out[" > ".join(here[1:])] = (name.get("nodeValue", ""), name.get("variableName", ""))
         for child in node.findall("NODE"):
             walk(child, here)
 
     if comparisons_root is not None:
         walk(comparisons_root, [])
-    return out
+    return out if values else list(out)
 
 
 def verify_saved(spec, saved):
@@ -468,10 +569,17 @@ def verify_saved(spec, saved):
     if root.tag != "PACKETTRACER5_ACTIVITY":
         issues.error(f"{saved} is not an activity (.pka)")
         return issues, {}
-    kept = set(graded_paths(root.find("COMPARISONS/NODE")))
+    built = graded_paths(ptlab.comparisons(items).find("NODE"), values=True)
+    saved_values = graded_paths(root.find("COMPARISONS/NODE"), values=True)
+    kept = set(saved_values)
     dropped = [p for p in expected if p not in kept]
     for p in dropped:
         issues.error(f"Packet Tracer dropped the item {p}: it does not exist in its answer network")
+    # Packet Tracer keeps the value and pattern written for a graded item as they are (it does not refresh them from
+    # its answer network), so only a changed pattern is a finding here; value formats are proven by verify_values
+    for p in expected:
+        if p in kept and built[p][1] != saved_values[p][1]:
+            issues.error(f"Packet Tracer changed the answer pattern of {p}: {built[p][1]!r} -> {saved_values[p][1]!r}")
     for p in sorted(kept - set(expected)):
         issues.warn(f"Packet Tracer grades an item the spec did not ask for: {p}")
     nets = root.findall("PACKETTRACER5")
@@ -490,3 +598,50 @@ def verify_saved(spec, saved):
                              f"(ptlab check would mark a correct student wrong)")
     return issues, {"expected": len(expected), "kept": len(expected) - len(dropped), "tests": len(tests),
                     "saved_tests": saved_tests, "local": passed, "local_total": len(checks)}
+
+
+def strip_assessment(src, dst):
+    """A copy of a built activity with every assessment item removed. Opened and saved by Packet Tracer, it comes
+    back with the whole assessment tree filled in from Packet Tracer's own answer network: the reference for the
+    value of every item the builder writes (see verify_values)."""
+    tree = ptlab.read_pkt(src)
+    node = tree.getroot().find("COMPARISONS/NODE")
+    if node is None:
+        raise ValueError(f"{src} is not a built activity")
+    for child in node.findall("NODE"):
+        node.remove(child)
+    ptlab.write_pkt(tree, dst)
+
+
+def verify_values(spec, bare_saved):
+    """Compare the value of every graded item with the value Packet Tracer itself fills in for that node."""
+    issues = Issues()
+    items, _ = labgen.compile_grade(spec)
+    built = graded_paths(ptlab.comparisons(items).find("NODE"), values=True)
+    filled = {}
+
+    def walk(node, path):
+        here = path + [node.findtext("ID") or ""]
+        name = node.find("NAME")
+        if name is not None:
+            filled[" > ".join(here[1:])] = name.get("nodeValue", "")
+        for child in node.findall("NODE"):
+            walk(child, here)
+
+    root = ptlab.read_pkt(bare_saved).getroot().find("COMPARISONS/NODE")
+    if root is not None:
+        walk(root, [])
+    same = 0
+    for path, (value, pattern) in built.items():
+        if path not in filled:
+            issues.error(f"Packet Tracer has no node {path}")
+        elif filled[path].strip() != value.strip():
+            msg = f"{path}: the lab writes {value!r}, Packet Tracer's own value is {filled[path]!r}"
+            if pattern:     # graded by its pattern; the value is only what the Activity Wizard displays
+                issues.warn(msg + " (graded by pattern)")
+                same += bool(re.search(pattern[len("{{RegEx:"):-2], filled[path]))
+            else:
+                issues.error(msg)
+        else:
+            same += 1
+    return issues, {"items": len(built), "same": same}

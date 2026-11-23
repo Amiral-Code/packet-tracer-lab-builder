@@ -116,8 +116,54 @@ the kept ones. First run over the examples: four clean, Northstar 43/48. Causes,
   routing 3, vlan 4, dual-routing 6, dual-vlan 7, lanbase-routing 8, qos 9). Switches whose answer uses IPv6 are
   preset to 5 in every network; `ipv6 unicast-routing` and the IPv6 addresses then appear in Packet Tracer's config.
 - Even with the addresses present, the two `ipv6 address …` line items were dropped while every line without `:`
-  was kept. Inference: `:` cannot appear in a LINES node ID (it separates Packet Tracer assessment paths, e.g.
-  `Network:Router0:Power`). Lint now rejects such items.
+  was kept. First inference (wrong, corrected below): `:` cannot appear in a LINES node ID. Lint rejected such items
+  until iteration 2.
 
 After the fixes all five examples pass: every item and connectivity test kept, every local check passing on
 Packet Tracer's answer network.
+
+## Iteration 2: grading formats (2026-11-23)
+
+Sources: 93 locally available activities (the user's own course files, decoded locally, nothing copied into the
+repository), plus round trips of generated activities through Packet Tracer 9.0.1.
+
+Observed in real activities:
+
+- **Several right answers:** graded items carry `variableEnabled="true"` and `variableName="{{RegEx:PATTERN}}"`
+  (71 items; not `RegExMatch`). Seen on port descriptions (`.*[Ss][3].*`, `^(?!\s*$).+`), MOTD banners, NAT source
+  settings and IP addresses (`\b(192?)\.(168?)\.(2?)\.(25[0-5]|…)\b`). Case-insensitivity is written with character
+  classes; the builder does the same and anchors its own patterns with `^…$`.
+- **LINES IDs write `:` as `-`.** A Packet Tracer-saved answer has the ID
+  `ipv6 route 2001-DB8-10--/64 2001-DB8-0-1--2` for the line `ipv6 route 2001:DB8:10::/64 2001:DB8:0:1::2`; IPv6
+  addresses are printed compressed and upper case. This, not a ban on `:`, is why the earlier IPv6 line items were
+  dropped. Lint no longer rejects them; the builder normalises the line and converts the ID.
+- **Trailing spaces** in Packet Tracer's running-config (counted over the answer networks): `ip route` (105 of 118),
+  `ip nat inside source static` (all; `… list` never), `switchport port-security mac-address sticky` (the bare
+  command), `switchport port-security violation …`, `aaa authentication login`, `ip host`, `redistribute`.
+- **Native item paths and values:** `Ports > IF > Ipv6 Address > ADDR > IP Address | Prefix`, `Default Gateway IPv6`,
+  `Ports > IF > Description`, `Banner motd`, `Ports > IF > NAT` (1 inside, 2 outside: matched to `ip nat inside/outside`
+  in the same file), `Ports > IF > Access-group In|Out` (the ACL name or number), `Ports > IF > Port Security >
+  Enabled | Max Secure Mac | Sticky Enabled | Violation` (restrict = 2), `Ports > IF > PortFast` (1),
+  `DHCP Server > Pools > NAME > Name | Start IP address | Subnet mask | Default Gateway | DNS Server`,
+  `Enable Secret`, `User Names > NAME` (`NAME HASH`).
+- **Secrets:** every `Enable Secret`/username hash uses MD5-crypt with the fixed salt `mERr`. MD5-crypt of `class`,
+  `cisco12345` and `Ciscoenpa55` with that salt reproduces the stored values exactly.
+- **Hosts' IPv6:** `PORT/IPV6_ADDRESSES/IPV6_ADDRESS` (`ADDRESS`, `PREFIX`, `TYPE` 0), `PORT/IPV6_PORT_GATEWAY`
+  and `ENGINE/GATEWAYV6`.
+- **ICMPv6 test:** type `20`, `DESTINATION` is the address text, then the same nested `CIpHeader`/`CIcmpMessage`
+  as IPv4 with IPv6 `SRCADDR`/`DSTADDR`.
+
+Observed in round trips (live Packet Tracer, no GUI interaction):
+
+- Packet Tracer keeps the value and pattern written for a **graded** item exactly as written (a deliberately wrong
+  NAT value `9` and pool start `1.2.3.4` survived a save). Saved graded values therefore prove nothing.
+- On save it fills the **rest** of the tree from its own answer network. Saving a copy with no assessment items
+  (`ptlab bare`) yields Packet Tracer's own value for every node: the reference `ptlab verify --values` compares
+  against. It showed port-security `protect` = 1 (so shutdown 0, protect 1, restrict 2), the DHCP pool start
+  = the network address, and that `banner motd ^C…^C` is misread by Packet Tracer (use another delimiter, e.g. `#`).
+- `examples/feature-probe-2.toml` (38 items over every new kind, two connectivity tests): 38/38 items kept, 2/2
+  tests kept, 38/38 values identical to Packet Tracer's own, 30/30 local checks pass on Packet Tracer's answer.
+
+Still unconfirmed live (needs Check Results in the GUI): a `{{RegEx:}}` item turning green for a value other than the
+answer's, `ping6` passing, and whether Check Results compares the stored value or the answer network's value for
+non-pattern items (they are identical for every generated item, so either way they agree).

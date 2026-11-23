@@ -1,0 +1,224 @@
+[lab]
+id = "feature-probe-2"
+title = "Branch Edge: Dual Stack and Hardening"
+level = 3
+kind = "configure"
+exam = "CCNA 1.8 / 1.9 / 3.4 / 4.1 / 4.3 / 5.3 / 5.7 - IPv6, OSPF, NAT, DHCP, FHRP, device access, port security"
+time = 45
+scenario = """
+A branch router connects the user LAN to a provider segment where a server lives. IPv4 addressing is in
+place on the router; everything else is still to do.
+
+Make the LAN dual stack, give users a DHCP pool and a virtual gateway, translate them towards the provider,
+harden the router, and lock down the user switch ports.
+"""
+objectives = [
+  "Configure IPv6 global and link-local addresses and an IPv6 static route",
+  "Configure a DHCPv4 pool, HSRP and PAT on a branch router",
+  "Secure device access with an enable secret, a local user and a banner",
+  "Tune OSPF with a router ID and a passive interface",
+  "Configure port security and PortFast on access ports",
+]
+
+[[device]]
+name = "R1"
+model = "router-2911"
+[[device]]
+name = "SW1"
+model = "switch-2960"
+[[device]]
+name = "PC1"
+model = "pc"
+[[device]]
+name = "PC2"
+model = "pc"
+[[device]]
+name = "SRV1"
+model = "server"
+
+[[link]]
+a = "R1 G0/0"
+b = "SW1 G0/1"
+[[link]]
+a = "SW1 Fa0/1"
+b = "PC1 Fa0"
+[[link]]
+a = "SW1 Fa0/2"
+b = "PC2 Fa0"
+[[link]]
+a = "R1 G0/1"
+b = "SRV1 Fa0"
+
+[[area]]
+label = "LAN  -  192.168.10.0/24  -  2001:DB8:10::/64"
+color = "cyan"
+devices = ["SW1", "PC1", "PC2"]
+[[area]]
+label = "PROVIDER  -  203.0.113.0/24  -  2001:DB8:99::/64"
+color = "orange"
+devices = ["SRV1"]
+
+[addressing]
+rows = [
+  ["R1",   "G0/0", "192.168.10.1/24",   ""],
+  ["R1",   "G0/0", "2001:db8:10::1/64", ""],
+  ["R1",   "G0/1", "203.0.113.1/24",    ""],
+  ["R1",   "G0/1", "2001:db8:99::1/64", ""],
+  ["PC1",  "Fa0",  "192.168.10.10/24",  "192.168.10.254"],
+  ["PC2",  "Fa0",  "192.168.10.20/24",  "192.168.10.254"],
+  ["PC2",  "Fa0",  "2001:db8:10::20/64", "fe80::1"],
+  ["SRV1", "Fa0",  "203.0.113.10/24",   "203.0.113.1"],
+  ["SRV1", "Fa0",  "2001:db8:99::10/64", "fe80::1"],
+]
+
+[config]
+unconfigured_hosts = ["PC1", "PC2"]
+
+[config.start]
+R1 = """
+interface G0/0
+ ip address 192.168.10.1 255.255.255.0
+ no shutdown
+interface G0/1
+ ip address 203.0.113.1 255.255.255.0
+ no shutdown
+"""
+
+[config.answer]
+R1 = """
+enable secret class
+username admin secret Adm1nPass
+banner motd #Authorized access only#
+ipv6 unicast-routing
+interface G0/0
+ description Link to LAN users
+ ip address 192.168.10.1 255.255.255.0
+ ip nat inside
+ ip access-group NO-TELNET in
+ standby 1 ip 192.168.10.254
+ standby 1 priority 110
+ standby 1 preempt
+ ipv6 address FE80::1 link-local
+ ipv6 address 2001:DB8:10::1/64
+ no shutdown
+interface G0/1
+ description Uplink to provider
+ ip address 203.0.113.1 255.255.255.0
+ ip nat outside
+ ipv6 address FE80::1 link-local
+ ipv6 address 2001:DB8:99::1/64
+ no shutdown
+ip access-list extended NO-TELNET
+ deny tcp any any eq telnet
+ permit ip any any
+access-list 1 permit 192.168.10.0 0.0.0.255
+ip nat inside source list 1 interface GigabitEthernet0/1 overload
+ip dhcp excluded-address 192.168.10.1 192.168.10.99
+ip dhcp excluded-address 192.168.10.254
+ip dhcp pool LAN
+ network 192.168.10.0 255.255.255.0
+ default-router 192.168.10.254
+ dns-server 203.0.113.10
+ipv6 route 2001:DB8:200::/64 2001:DB8:99::10
+router ospf 1
+ router-id 1.1.1.1
+ passive-interface GigabitEthernet0/0
+ network 192.168.10.0 0.0.0.255 area 0
+"""
+SW1 = """
+interface Fa0/1
+ switchport mode access
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ spanning-tree portfast
+interface Fa0/2
+ switchport mode access
+ switchport port-security
+ switchport port-security violation protect
+ spanning-tree portfast
+"""
+
+[[part]]
+title = "Dual stack"
+intro = "Users keep IPv4 and gain IPv6. The router's link-local address is the same on both interfaces so hosts can use one easy gateway."
+steps = [
+  "On **R1**, enable IPv6 routing. Give **G0/0** `2001:DB8:10::1/64` and **G0/1** `2001:DB8:99::1/64`, both with link-local `FE80::1`.",
+  "Add an IPv6 static route to **2001:DB8:200::/64** (a lab network behind SRV1) via **2001:DB8:99::10**.",
+  "On **PC2**, set `2001:DB8:10::20/64` with gateway `FE80::1`. PC2 also keeps IPv4 `192.168.10.20/24`.",
+  "Check: `show ipv6 interface brief`, `show ipv6 route`, and from PC2 `ping 2001:DB8:99::10`.",
+]
+hint = "Link-local addresses are set per interface with `ipv6 address FE80::1 link-local`."
+why = "A memorable link-local gateway survives renumbering of the global prefix."
+
+[[part]]
+title = "Users: DHCP, gateway, translation"
+intro = "Users get addresses from R1, a virtual gateway that can later move to a second router, and PAT towards the provider."
+steps = [
+  "Create DHCP pool **LAN** for 192.168.10.0/24 with default router **192.168.10.254** and DNS server **203.0.113.10**; exclude .1-.99 and .254.",
+  "Configure **HSRP group 1** on G0/0 with virtual IP **192.168.10.254**, priority **110**, preempt.",
+  "Give **PC1** any free address in 192.168.10.0/24 (static or DHCP) with either router address as gateway.",
+  "Configure PAT: G0/0 inside, G0/1 outside, translate 192.168.10.0/24 (ACL 1) to G0/1's address.",
+  "Describe G0/0 so it mentions the **LAN**.",
+  "Check: `show ip dhcp binding`, `show standby brief`, PC1 pings 203.0.113.10, then `show ip nat translations`.",
+]
+hint = "PAT needs three things: inside/outside on the interfaces, an ACL for who is translated, and `ip nat inside source list 1 interface G0/1 overload`."
+why = "Grading accepts any address in the subnet and either gateway, because a real network accepts both."
+
+[[part]]
+title = "Hardening"
+intro = "Lock the router and the user ports down."
+steps = [
+  "On **R1**: enable secret `class`, local user **admin** with secret `Adm1nPass`, a MOTD banner saying access is **authorized** only.",
+  "Block Telnet from the LAN with the named ACL **NO-TELNET** inbound on G0/0 (deny telnet, permit everything else).",
+  "OSPF process 1: router ID **1.1.1.1**, advertise 192.168.10.0/24 in area 0, and make G0/0 **passive**.",
+  "On **SW1** Fa0/1: port security, maximum **2**, sticky learning, violation **restrict**, PortFast.",
+  "On **SW1** Fa0/2: port security with violation **protect**, PortFast.",
+  "Check: `show port-security interface Fa0/1`, `show ip protocols`.",
+]
+hint = "A passive interface still has its network advertised; it just sends no hellos."
+why = "Each of these closes a common gap: guessable privilege passwords, rogue OSPF neighbours on the user LAN, and MAC flooding."
+
+[grade]
+items = [
+  "ip6 R1 G0/0 2001:db8:10::1/64",
+  "ip6 R1 G0/1 2001:db8:99::1/64",
+  'in R1 "interface G0/0" "ipv6 address FE80::1 link-local"',
+  "route6 R1 2001:db8:200::/64 2001:db8:99::10",
+  "ip6 PC2 Fa0 2001:db8:10::20/64",
+  "gw6 PC2 FE80::1",
+  "pool R1 LAN 192.168.10.0/24 gw 192.168.10.254 dns 203.0.113.10",
+  "hsrp R1 G0/0 1 192.168.10.254 priority 110 preempt",
+  "ip PC1 Fa0 in 192.168.10.0/24",
+  "gw PC1 192.168.10.1|192.168.10.254",
+  "nat R1 G0/0 inside",
+  "nat R1 G0/1 outside",
+  "line R1 ip nat inside source list 1 interface GigabitEthernet0/1 overload",
+  "desc R1 G0/0 ~lan",
+  "secret R1 class",
+  "user R1 admin Adm1nPass",
+  "banner R1 ~authorized",
+  "acl R1 G0/0 NO-TELNET in",
+  "rid R1 1 1.1.1.1",
+  "passive R1 1 G0/0",
+  "portsec SW1 Fa0/1 max 2 sticky violation restrict",
+  "portsec SW1 Fa0/2 violation protect",
+  "portfast SW1 Fa0/1",
+  "portfast SW1 Fa0/2",
+  "ping PC1 SRV1",
+  "ping6 PC2 SRV1",
+]
+
+debrief = """
+Several items here accept more than one right answer: PC1 may use any address in its subnet and either the
+real or the virtual gateway, the description only has to mention the LAN, and the banner only has to say
+access is authorized. Packet Tracer matches those with regular expressions instead of one fixed value.
+
+The IPv6 ping only works when every piece is in place: addresses on both router interfaces, the host's
+address and its link-local gateway, and IPv6 routing switched on.
+"""
+questions = [
+  "Why can PC2 use FE80::1 as its gateway on any LAN, while an IPv4 gateway must be in the host's subnet?",
+  "Which command shows that the passive interface still has its network advertised?",
+]

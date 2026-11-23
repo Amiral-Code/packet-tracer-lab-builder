@@ -139,6 +139,7 @@ def merge(factory_lines, snippet):
             base = [(h, b) for h, b in base if h or b[0] not in (target, line)]
             if line in SHOWN_NEGATIONS:             # e.g. "no ip domain-lookup" stays in the running-config
                 base.append((None, [line]))
+            index = {h: i for i, (h, _) in enumerate(base) if h}   # removing a line shifts every later section
             continue
         if line.startswith("hostname "):
             base = [(h, b) if h or not b[0].startswith("hostname ") else (None, [line]) for h, b in base]
@@ -171,6 +172,8 @@ def _cancels(new, old):
     if new == "shutdown" and old == "shutdown":
         return True
     if new.startswith("ip address ") and (old.startswith("ip address ") or old == "no ip address"):
+        return True
+    if new == "no ip address" and (old.startswith("ip address ") or old == "no ip address"):
         return True
     if new.startswith("description ") and old.startswith("description "):
         return True
@@ -208,11 +211,96 @@ def pc_settings(spec):
         if not any(d["name"] == dev and ptbuild_model_is_host(d["model"]) for d in spec["device"]):
             continue
         if cidr.lower() == "dhcp":
-            out[dev] = {"dhcp": True}
+            out.setdefault(dev, {})["dhcp"] = True
             continue
         n = ipaddress.ip_interface(cidr)
-        out[dev] = {"ip": str(n.ip), "mask": str(n.netmask), "gw": gw}
+        if n.version == 6:          # a second row for the same host gives its IPv6 address and gateway
+            s = out.setdefault(dev, {})
+            s.setdefault("ip6", []).append(v6(cidr))
+            if gw:
+                s["gw6"] = v6(gw)
+            continue
+        out.setdefault(dev, {}).update({"ip": str(n.ip), "mask": str(n.netmask), "gw": gw})
     return out
+
+
+def v6(text):
+    """An IPv6 address or prefix the way Packet Tracer shows it: compressed, upper-case (2001:DB8:1::1/64)."""
+    if "/" in text:
+        a, n = text.split("/")
+        return f"{ipaddress.ip_address(a).compressed.upper()}/{int(n)}"
+    return ipaddress.ip_address(text).compressed.upper()
+
+
+def _octet_range(lo, hi):
+    """Regex for the decimal integers lo..hi (0-255), no leading zeros: 1..254 -> ([1-9]|[1-9][0-9]|1[0-9][0-9]|..."""
+    parts = []
+    for width in (1, 2, 3):                         # split by digit count so no class ever starts with 0
+        start, end = max(lo, 0 if width == 1 else 10 ** (width - 1)), min(hi, 10 ** width - 1)
+        while start <= end:
+            k = 0
+            while k < width - 1 and start % 10 ** (k + 1) == 0 and start + 10 ** (k + 1) - 1 <= end:
+                k += 1
+            blk = 10 ** k
+            d0 = (start // blk) % 10
+            m = min(10 - d0, (end - start + 1) // blk)
+            head = str(start // (blk * 10)) if start >= blk * 10 else ""
+            digit = str(d0) if m == 1 else f"[{d0}-{d0 + m - 1}]"
+            parts.append(head + digit + "[0-9]" * k)
+            start += m * blk
+    return parts[0] if len(parts) == 1 else "(" + "|".join(parts) + ")"
+
+
+def host_regex(network):
+    """^...$ matching exactly the usable host addresses of an IPv4 network (Packet Tracer {{RegEx:}} items)."""
+    n = ipaddress.ip_network(network, strict=False)
+    first, last = int(n.network_address), int(n.broadcast_address)
+    if n.prefixlen < 31:
+        first, last = first + 1, last - 1
+
+    def rx(lo, hi, depth=0):          # lo..hi as 32-bit ints, split on the first octet that differs
+        if depth == 4:
+            return ""
+        shift = 8 * (3 - depth)
+        a, b = (lo >> shift) & 255, (hi >> shift) & 255
+        mask = (1 << shift) - 1
+        sep = r"\." if depth < 3 else ""
+        if a == b:
+            return str(a) + sep + rx(lo, hi, depth + 1)
+        alts = []
+        if lo & mask:                                   # partial first block
+            alts.append(str(a) + sep + rx(lo, (lo | mask), depth + 1)); a += 1
+        tail = None
+        if (hi & mask) != mask:                         # partial last block
+            tail = str(b) + sep + rx(hi & ~mask, hi, depth + 1); b -= 1
+        if a <= b:
+            rest = "".join(sep2 + "(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])"
+                           for sep2 in [""] + [r"\."] * (2 - depth)) if depth < 3 else ""
+            alts.append(_octet_range(a, b) + (sep + rest if depth < 3 else ""))
+        if tail:
+            alts.append(tail)
+        return alts[0] if len(alts) == 1 else "(" + "|".join(alts) + ")"
+
+    return "^" + rx(first, last) + "$"
+
+
+def contains_regex(word):
+    """Case-insensitive 'contains WORD', written with character classes like Packet Tracer's own items."""
+    body = "".join(f"[{c.upper()}{c.lower()}]" if c.isalpha() else re.escape(c) for c in word)
+    return f".*{body}.*"
+
+
+NON_EMPTY_REGEX = r"^(?!\s*$).+"      # "anything but blank", as real activities grade descriptions and banners
+
+
+def text_match(spec_text):
+    """'~word' -> contains word (any case); 'any' -> not blank; otherwise exact. Returns (regex or "", local rx)."""
+    if spec_text == "any":
+        return NON_EMPTY_REGEX, r".*\S.*"
+    if spec_text.startswith("~"):
+        r = contains_regex(spec_text[1:])
+        return r, r
+    return "", re.escape(spec_text)
 
 
 def ptbuild_model_is_host(model):
@@ -404,9 +492,10 @@ def pcs_for(spec, which):
 
 # ---------------------------------------------------------------- grading statements
 TCP_PORTS = {"http": 80, "https": 443, "ssh": 22, "telnet": 23}
-CONNECTIVITY_STATEMENTS = ("ping", "tcp", *TCP_PORTS)
-GRADE_STATEMENTS = ("ip", "up", "gw", "hostname", "line", "in", "dhcp", "vlan", "access", "trunk", "route",
-                    "ospf", "stp", *CONNECTIVITY_STATEMENTS, "cable")
+CONNECTIVITY_STATEMENTS = ("ping", "ping6", "tcp", *TCP_PORTS)
+GRADE_STATEMENTS = ("ip", "ip6", "up", "gw", "gw6", "hostname", "line", "in", "dhcp", "vlan", "access", "trunk",
+                    "route", "route6", "ospf", "rid", "passive", "stp", "portfast", "portsec", "desc", "banner",
+                    "nat", "acl", "hsrp", "pool", "secret", "user", *CONNECTIVITY_STATEMENTS, "cable")
 
 
 def _args(statement, n):
@@ -431,32 +520,64 @@ def vlan_list(text):
     return ",".join(out)
 
 
-# Lines Packet Tracer writes into its running-config with a trailing space (seen in a saved activity:
+# Lines Packet Tracer writes into its running-config with a trailing space (seen in saved activities, e.g.
 # "ip route 10.99.0.0 255.255.0.0 192.168.2.254 "). LINES items are matched on the exact line, so an item
-# without the space does not exist in the answer and Packet Tracer silently drops it.
-PT_TRAILING_SPACE = {"ip route": " "}
+# without the space does not exist in the answer and Packet Tracer silently drops it. Keyed by the line's start;
+# the sticky entry is exact (a learned "... sticky 0005.5E34.3417" line has no trailing space).
+PT_TRAILING_SPACE = ("ip route ", "ip nat inside source static ", "ip host ", "aaa authentication login ",
+                     "redistribute ", "switchport port-security violation ")
+PT_TRAILING_EXACT = ("switchport port-security mac-address sticky",)
+_V6_TOKEN = re.compile(r"(?<![\w:])([0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,7})(/\d+)?(?![\w:])")
+
+
+def pt_line(line):
+    """A config line exactly as Packet Tracer prints it: single spaces, IPv6 compressed upper-case, and the trailing
+    space Packet Tracer adds to some commands."""
+    line = " ".join(line.split())
+    line = _V6_TOKEN.sub(lambda m: v6(m.group(1)) + (m.group(2) or ""), line)
+    if line.startswith(PT_TRAILING_SPACE) or line in PT_TRAILING_EXACT:
+        line += " "
+    return line
+
+
+def line_id(text):
+    """LINES node ID: Packet Tracer writes ':' as '-' (it separates assessment paths), so
+    'ipv6 route 2001:DB8:10::/64 2001:DB8:0:1::2' is stored as 'ipv6 route 2001-DB8-10--/64 2001-DB8-0-1--2'."""
+    return text.replace(":", "-")
 
 
 def _line_item(items, checks, dev, parent, line):
     """A running-config line Packet Tracer grades natively (LINES node) plus the matching local check."""
-    line = " ".join(line.split())
+    shown = pt_line(line)
+    want = re.escape(shown.strip())
     if parent:
-        parent = " ".join(parent.split())
-        items.append({"device": dev, "kind": "run_line", "line_id": f"{parent} {line}", "value": " " + line})
-        checks.append({"device": dev, "desc": f"{dev}: {parent} / {line}", "block": re.escape(parent),
-                       "has": [re.escape(line)]})
+        parent = pt_line(parent).rstrip()
+        if parent.startswith("interface "):     # Packet Tracer's lines always carry the full interface name
+            parent = "interface " + long_if(parent.split(None, 1)[1])
+        items.append({"device": dev, "kind": "run_line", "line_id": line_id(f"{parent} {shown}"), "value": " " + shown})
+        checks.append({"device": dev, "desc": f"{dev}: {parent} / {shown.strip()}", "block": re.escape(parent),
+                       "has": [want]})
     else:
-        shown = line + PT_TRAILING_SPACE.get(" ".join(line.split()[:2]), "")
-        items.append({"device": dev, "kind": "run_line", "line_id": shown, "value": shown})
-        checks.append({"device": dev, "desc": f"{dev}: {line}", "has": [re.escape(line)], "top": True})
+        items.append({"device": dev, "kind": "run_line", "line_id": line_id(shown), "value": shown})
+        checks.append({"device": dev, "desc": f"{dev}: {shown.strip()}", "has": [want], "top": True})
+
+
+def first_addresses(spec):
+    """({device: first IPv4 address}, {device: first IPv6 address}) from the addressing table."""
+    first, first6 = {}, {}
+    for row in addressing_rows(spec):
+        if len(row) >= 3 and row[2] and row[2].lower() != "dhcp":
+            n = ipaddress.ip_interface(row[2])
+            if n.version == 6:
+                first6.setdefault(row[0], v6(str(n.ip)))
+            else:
+                first.setdefault(row[0], str(n.ip))
+    return first, first6
 
 
 def connectivity_tests(spec):
-    """Compile ICMP and TCP outcome statements for Packet Tracer's Connectivity Tests tab."""
-    first = {}
-    for row in addressing_rows(spec):
-        if len(row) >= 3 and row[2] and row[2].lower() != "dhcp":
-            first.setdefault(row[0], str(ipaddress.ip_interface(row[2]).ip))
+    """Compile ICMP, ICMPv6 and TCP outcome statements for Packet Tracer's Connectivity Tests tab."""
+    first, first6 = first_addresses(spec)
     tests = []
     points = spec.get("grade", {}).get("points", {})
     for st in spec.get("grade", {}).get("items", []):
@@ -464,7 +585,7 @@ def connectivity_tests(spec):
         if w[0] not in CONNECTIVITY_STATEMENTS:
             continue
         kind = w[0]
-        protocol = "icmp" if kind == "ping" else "tcp"
+        protocol = {"ping": "icmp", "ping6": "icmp6"}.get(kind, "tcp")
         port = None
         rest_at = 3
         if kind == "tcp":
@@ -475,12 +596,16 @@ def connectivity_tests(spec):
         rest = w[rest_at:]
         succeed = "fail" not in rest
         rest = [x for x in rest if x != "fail"]
-        ip = rest[0] if rest else first.get(w[2])
+        table = first6 if protocol == "icmp6" else first
+        ip = (v6(rest[0]) if protocol == "icmp6" else rest[0]) if rest else table.get(w[2])
         if ip is None:
-            die(f"{st}: {w[2]} has no address in the addressing table; give an explicit destination address")
+            die(f"{st}: {w[2]} has no {'IPv6 ' if protocol == 'icmp6' else ''}address in the addressing table; "
+                f"give an explicit destination address")
         test = {"src": w[1], "dst": w[2], "ip": ip, "succeed": succeed, "protocol": protocol,
-                "src_ip": first.get(w[1], ""), "points": points.get(st, 1)}
-        if protocol == "tcp":
+                "src_ip": table.get(w[1], ""), "points": points.get(st, 1)}
+        if protocol == "icmp6":
+            test["desc"] = f"{w[1]} {'can' if succeed else 'cannot'} ping {w[2]} ({ip}, IPv6)"
+        elif protocol == "tcp":
             test["port"] = port
             test["desc"] = f"{w[1]} {'can' if succeed else 'cannot'} open TCP/{port} on {w[2]} ({ip})"
         else:
@@ -537,7 +662,33 @@ def default_hint(w, item):
         return f"Check the VLANs on {dev} and their names: show vlan brief."
     if kind in ("access_vlan", "native_vlan") or k in ("access", "trunk"):
         return f"Check how {dev} {port or short_if(long_if(w[2]))} is configured: show interfaces switchport / show interfaces trunk."
+    if kind in ("ip6_addr", "ip6_prefix"):
+        return f"Compare {dev} {port}'s IPv6 address and prefix length with the addressing table (show ipv6 interface brief / ipv6config)."
+    if kind == "gw6":
+        return f"Check {dev}'s IPv6 default gateway (ipv6config): usually its router's link-local or global address."
+    if kind == "description":
+        return f"Check the description on {dev} {port}: show interfaces description."
+    if kind == "banner":
+        return f"Check {dev}'s message-of-the-day banner: show running-config | include banner."
+    if kind == "nat":
+        return f"Which side of NAT is {dev} {port} on? show ip nat statistics lists the inside and outside interfaces."
+    if kind in ("acl_in", "acl_out"):
+        return f"Which ACL is applied to {dev} {port}, and in which direction? show ip interface {port}."
+    if kind.startswith("psec"):
+        return f"Check port security on {dev} {port}: show port-security interface {port}."
+    if kind == "portfast":
+        return f"Check PortFast on {dev} {port}: show spanning-tree interface {port} detail."
+    if kind == "enable_secret":
+        return f"Check {dev}'s privileged-mode password: it must be an enable secret, not an enable password."
+    if kind == "username":
+        return f"Check {dev}'s local user accounts: show running-config | include username."
+    if kind.startswith("pool_"):
+        return f"Check {dev}'s DHCP pool settings: show running-config | section dhcp, then show ip dhcp pool."
     hints = {"route": f"Check the static routes on {dev}: show ip route static.",
+             "route6": f"Check the IPv6 static routes on {dev}: show ipv6 route static.",
+             "rid": f"Check the OSPF router ID on {dev}: show ip protocols (a new router-id needs clear ip ospf process).",
+             "passive": f"Check which interfaces are passive on {dev}: show ip protocols.",
+             "hsrp": f"Check HSRP on {dev}: show standby brief.",
              "ospf": f"Check which networks OSPF advertises on {dev}, and in which area: show ip protocols.",
              "stp": f"Check the bridge priority on {dev}: show spanning-tree.",
              "line": f"Compare {dev}'s running configuration with the task: show running-config.",
@@ -547,7 +698,133 @@ def default_hint(w, item):
 
 def _statement(st, w, k, items, checks, spec):
     """One grade statement -> Packet Tracer items (+ local checks)."""
-    if k == "ip":                       # ip DEV IFACE A.B.C.D/NN
+    is_host = any(d["name"] == w[1] and ptbuild_model_is_host(d["model"]) for d in spec["device"]) if len(w) > 1 else False
+    if k == "ip" and len(w) > 3 and w[3] == "in":   # ip DEV IFACE in NET/LEN: any usable host address of NET
+        dev, iface, net = w[1], long_if(w[2]), ipaddress.ip_network(w[4], strict=False)
+        rx = host_regex(net)
+        known = next((r[2] for r in addressing_rows(spec) if len(r) > 2 and r[0] == dev and long_if(r[1]) == iface
+                      and r[2] and r[2].lower() != "dhcp"), None)
+        here = str(ipaddress.ip_interface(known).ip) if known else str(next(net.hosts()))
+        items += [{"device": dev, "kind": "ip", "port": iface, "value": here, "regex": rx},
+                  {"device": dev, "kind": "mask", "port": iface, "value": str(net.netmask)}]
+        if is_host:
+            checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} any address in {net}",
+                           "ip_in": str(net), "mask": str(net.netmask)})
+        else:
+            checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} any address in {net}",
+                           "block": "interface " + re.escape(iface),
+                           "has": [f"ip address {rx[1:-1]} {re.escape(str(net.netmask))}"]})
+    elif k == "ip6":                    # ip6 DEV IFACE ADDR/LEN
+        dev, iface, cidr = w[1], long_if(w[2]), v6(w[3])
+        addr, plen = cidr.split("/")
+        items += [{"device": dev, "kind": "ip6_addr", "port": iface, "addr": addr, "value": addr},
+                  {"device": dev, "kind": "ip6_prefix", "port": iface, "addr": addr, "value": plen}]
+        if is_host:
+            checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} {cidr}", "ip6": cidr})
+        else:
+            checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} {cidr}", "block": "interface " + re.escape(iface),
+                           "has": [f"ipv6 address {re.escape(cidr)}"]})
+    elif k == "gw6":                    # gw6 HOST ADDR
+        items.append({"device": w[1], "kind": "gw6", "value": v6(w[2])})
+        checks.append({"device": w[1], "desc": f"{w[1]} IPv6 gateway {v6(w[2])}", "gw6": v6(w[2])})
+    elif k == "route6":                 # route6 DEV PREFIX/LEN NEXT-HOP|EXIT-IFACE
+        net = ipaddress.ip_network(w[2], strict=True)
+        via = v6(w[3]) if ":" in w[3] else long_if(w[3])
+        _line_item(items, checks, w[1], None, f"ipv6 route {net.compressed.upper()} {via}")
+    elif k == "rid":                    # rid DEV PID A.B.C.D
+        _line_item(items, checks, w[1], f"router ospf {int(w[2])}", f"router-id {ipaddress.ip_address(w[3])}")
+    elif k == "passive":                # passive DEV PID IFACE
+        _line_item(items, checks, w[1], f"router ospf {int(w[2])}", f"passive-interface {long_if(w[3])}")
+    elif k == "portfast":               # portfast SW IFACE
+        dev, iface = w[1], long_if(w[2])
+        items.append({"device": dev, "kind": "portfast", "port": iface, "value": "1"})
+        checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} PortFast", "block": "interface " + re.escape(iface),
+                       "has": [r"spanning-tree portfast( edge)?"]})
+    elif k == "portsec":                # portsec SW IFACE [max N] [sticky] [violation protect|restrict|shutdown]
+        dev, iface = w[1], long_if(w[2])
+        opts = w[3:]
+        block = "interface " + re.escape(iface)
+        items.append({"device": dev, "kind": "psec_on", "port": iface, "value": "1"})
+        checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} port security on", "block": block,
+                       "has": ["switchport port-security"]})
+        if "max" in opts:
+            n = int(opts[opts.index("max") + 1])
+            items.append({"device": dev, "kind": "psec_max", "port": iface, "value": str(n)})
+            checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} port security maximum {n}", "block": block,
+                           "has": [f"switchport port-security maximum {n}"]})
+        if "sticky" in opts:
+            items.append({"device": dev, "kind": "psec_sticky", "port": iface, "value": "1"})
+            checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} sticky MAC learning", "block": block,
+                           "has": ["switchport port-security mac-address sticky"]})
+        if "violation" in opts:
+            mode = opts[opts.index("violation") + 1]
+            items.append({"device": dev, "kind": "psec_violation", "port": iface, "value": PSEC_VIOLATION[mode]})
+            checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} violation {mode}", "block": block,
+                           **({"lacks": [r"switchport port-security violation \S+"]} if mode == "shutdown"
+                              else {"has": [f"switchport port-security violation {mode}"]})})
+    elif k == "desc":                   # desc DEV IFACE TEXT | ~word | any
+        dev, iface = w[1], long_if(w[2])
+        text = " ".join(shlex.split(st)[3:])
+        rx, local = text_match(text)
+        actual = answer_line_value(spec, dev, f"interface {iface}", "description ") or text.lstrip("~")
+        items.append({"device": dev, "kind": "description", "port": iface, "value": actual, "regex": rx})
+        checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} description {text}",
+                       "block": "interface " + re.escape(iface), "has": [f"description {local}"]})
+    elif k == "banner":                 # banner DEV TEXT | ~word | any   (the MOTD banner)
+        dev = w[1]
+        text = " ".join(shlex.split(st)[2:])
+        rx, local = text_match(text)
+        if not rx:                      # exact text: Packet Tracer keeps the delimiters' line breaks, so match inside
+            rx = local = ".*" + re.escape(text) + ".*"
+        actual = ptlab.banner_text(spec.get("config", {}).get("answer", {}).get(dev, "").splitlines()) \
+            or text.lstrip("~")
+        items.append({"device": dev, "kind": "banner", "value": actual, "regex": rx})
+        checks.append({"device": dev, "desc": f"{dev} MOTD banner {text}", "banner": rx})
+    elif k == "nat":                    # nat DEV IFACE inside|outside
+        dev, iface, side = w[1], long_if(w[2]), w[3]
+        items.append({"device": dev, "kind": "nat", "port": iface, "value": {"inside": "1", "outside": "2"}[side]})
+        checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} NAT {side}", "block": "interface " + re.escape(iface),
+                       "has": [f"ip nat {side}"]})
+    elif k == "acl":                    # acl DEV IFACE NAME|NUMBER in|out
+        dev, iface, acl, way = w[1], long_if(w[2]), w[3], w[4]
+        items.append({"device": dev, "kind": f"acl_{way}", "port": iface, "value": acl})
+        checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} access-group {acl} {way}",
+                       "block": "interface " + re.escape(iface), "has": [f"ip access-group {re.escape(acl)} {way}"]})
+    elif k == "hsrp":                   # hsrp DEV IFACE GROUP VIP [priority N] [preempt]
+        dev, iface, grp, vip = w[1], long_if(w[2]), int(w[3]), ipaddress.ip_address(w[4])
+        parent = f"interface {iface}"
+        _line_item(items, checks, dev, parent, f"standby {grp} ip {vip}")
+        if "priority" in w:
+            _line_item(items, checks, dev, parent, f"standby {grp} priority {int(w[w.index('priority') + 1])}")
+        if "preempt" in w:
+            _line_item(items, checks, dev, parent, f"standby {grp} preempt")
+    elif k == "pool":                   # pool DEV NAME NET/LEN [gw A.B.C.D] [dns A.B.C.D]
+        dev, name, net = w[1], w[2], ipaddress.ip_network(w[3], strict=True)
+        opts = dict(zip(w[4::2], w[5::2]))
+        items += [{"device": dev, "kind": "pool_name", "pool": name, "value": name},
+                  {"device": dev, "kind": "pool_start", "pool": name, "value": str(net.network_address)},
+                  {"device": dev, "kind": "pool_mask", "pool": name, "value": str(net.netmask)}]
+        has = [f"network {net.network_address} {net.netmask}"]
+        if "gw" in opts:
+            items.append({"device": dev, "kind": "pool_gw", "pool": name, "value": opts["gw"]})
+            has.append(f"default-router {re.escape(opts['gw'])}")
+        if "dns" in opts:
+            items.append({"device": dev, "kind": "pool_dns", "pool": name, "value": opts["dns"]})
+            has.append(f"dns-server {re.escape(opts['dns'])}")
+        checks.append({"device": dev, "desc": f"{dev} DHCP pool {name} {net}", "block": "ip dhcp pool " + re.escape(name),
+                       "has": [h.replace(".", r"\.") if h.startswith("network") else h for h in has]})
+    elif k == "secret":                 # secret DEV PASSWORD   (enable secret)
+        dev, pw = w[1], shlex.split(st)[2]
+        items.append({"device": dev, "kind": "enable_secret", "value": ptlab.md5crypt(pw)})
+        checks.append({"device": dev, "desc": f"{dev} enable secret", "top": True,
+                       "has": [f"enable secret (5 {re.escape(ptlab.md5crypt(pw))}|{re.escape(pw)})"]})
+    elif k == "user":                   # user DEV NAME PASSWORD   (username NAME secret PASSWORD)
+        dev, name, pw = w[1], w[2], shlex.split(st)[3]
+        items.append({"device": dev, "kind": "username", "user": name, "value": f"{name} {ptlab.md5crypt(pw)}"})
+        checks.append({"device": dev, "desc": f"{dev} user {name}", "top": True,
+                       "has": [f"username {re.escape(name)} (privilege \\d+ )?secret "
+                               f"(5 {re.escape(ptlab.md5crypt(pw))}|{re.escape(pw)})"]})
+    elif k == "ip":                     # ip DEV IFACE A.B.C.D/NN
         dev, iface, cidr = w[1], long_if(w[2]), w[3]
         n = ipaddress.ip_interface(cidr)
         items += [{"device": dev, "kind": "ip", "port": iface, "value": str(n.ip)},
@@ -562,6 +839,12 @@ def _statement(st, w, k, items, checks, spec):
         items.append({"device": dev, "kind": "port_on", "port": iface})
         checks.append({"device": dev, "desc": f"{dev} {short_if(iface)} is up", "block": "interface " + re.escape(iface),
                        "lacks": ["shutdown"], "absent_ok": True})
+    elif k == "gw" and "|" in w[2]:     # gw HOST A.B.C.D|A.B.C.D: any of these routers
+        alts = [str(ipaddress.ip_address(a)) for a in w[2].split("|")]
+        table_gw = pc_settings(spec).get(w[1], {}).get("gw")
+        items.append({"device": w[1], "kind": "gw", "value": table_gw if table_gw in alts else alts[0],
+                      "regex": "^(" + "|".join(re.escape(a) for a in alts) + ")$"})
+        checks.append({"device": w[1], "desc": f"{w[1]} gateway {' or '.join(alts)}", "gw": "|".join(alts)})
     elif k == "gw":                     # gw HOST A.B.C.D
         items.append({"device": w[1], "kind": "gw", "value": w[2]})
         checks.append({"device": w[1], "desc": f"{w[1]} gateway {w[2]}", "gw": w[2]})
@@ -614,6 +897,23 @@ def _statement(st, w, k, items, checks, spec):
         _cable_item(items, checks, spec, w[1], w[2], w[3], w[4])
     else:
         die(f"unknown grade statement: {st}")
+
+
+PSEC_VIOLATION = {"shutdown": "0", "protect": "1", "restrict": "2"}   # Port Security > Violation, as Packet Tracer fills it
+
+
+def answer_line_value(spec, dev, parent, prefix):
+    """The rest of the first answer-config line starting with prefix (inside parent, if given), e.g. a description."""
+    text = spec.get("config", {}).get("answer", {}).get(dev, "")
+    scope = ptlab.blocks(text.splitlines()).get(" ".join(parent.split()) if parent else "GLOBAL", [])
+    if parent:   # the spec may use short interface names
+        for head, body in ptlab.blocks(text.splitlines()).items():
+            if head.startswith("interface ") and long_if(head.split(None, 1)[1]) == parent.split(None, 1)[1]:
+                scope = body
+    for line in scope:
+        if line.startswith(prefix):
+            return line[len(prefix):].strip()
+    return None
 
 
 def _cable_item(items, checks, spec, a, pa, b, pb):

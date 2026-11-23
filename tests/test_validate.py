@@ -84,9 +84,26 @@ class LintTests(unittest.TestCase):
         self.assertError(lambda s: s["grade"]["items"].append("tcp PC1 R1 70000"), "1-65535")
         self.assertError(lambda s: s["grade"]["items"].append("https PC1 NOPE"), "unknown device")
 
-    def test_config_lines_with_colons_are_rejected(self):
-        self.assertError(lambda s: s["grade"]["items"].append('in R1 "interface GigabitEthernet0/0" "ipv6 address 2001:DB8::1/64"'),
-                         "containing ':'")
+    def test_iteration_2_statements(self):
+        errors = self.lint(lambda s: s["grade"]["items"].extend([
+            'in R1 "interface GigabitEthernet0/0" "ipv6 address 2001:DB8::1/64"', "ip PC1 Fa0 in 192.168.1.0/24",
+            "ip6 R1 G0/0 2001:db8::1/64", "route6 R1 ::/0 2001:db8::2", "gw PC1 192.168.1.1|192.168.1.254",
+            "portsec SW1 Fa0/1 max 2 sticky violation restrict", "portfast SW1 Fa0/1", "desc R1 G0/0 ~lan",
+            "banner R1 any", "nat R1 G0/0 inside", "acl R1 G0/0 100 in", "hsrp R1 G0/0 1 192.168.1.254 priority 110 preempt",
+            "pool R1 LAN 192.168.1.0/24 gw 192.168.1.1", "secret R1 class", "user R1 admin pw", "rid R1 1 1.1.1.1",
+            "passive R1 1 G0/0"])).errors
+        self.assertEqual(errors, [])
+        self.assertError(lambda s: s["grade"]["items"].append("portsec SW1 Fa0/1 violation drop"), "violation is")
+        self.assertError(lambda s: s["grade"]["items"].append("nat PC1 Fa0 inside"), "is a host")
+        self.assertError(lambda s: s["grade"]["items"].append("gw R1 192.168.1.1"), "not a host")
+        self.assertError(lambda s: s["grade"]["items"].append("ping6 PC1 R1"), "no IPv6 address")
+        self.assertError(lambda s: s["grade"]["items"].append("ip6 R1 G0/0 10.0.0.1/24"), "IPv6")
+
+    def test_config_only_grading_is_flagged(self):
+        warnings = [m for level, m in self.lint() if level == "warning"]
+        self.assertTrue(any("only configuration is graded" in w for w in warnings), warnings)
+        warnings = [m for level, m in self.lint(lambda s: s["grade"]["items"].append("ping PC1 R1")) if level == "warning"]
+        self.assertFalse(any("only" in w for w in warnings), warnings)
 
     def test_valid_new_statements_pass(self):
         errors = self.lint(lambda s: s["grade"]["items"].extend([
