@@ -26,6 +26,8 @@ Grade with the most specific statement (`access`, `trunk`, `vlan`, `route`, `osp
 `banner DEV ~word`. IPv6 is fully supported, including hosts (a second addressing row) and `ping6`.
 Add connectivity tests for the outcomes the lab is about, on top of the config items: `ping`/`ping6` for reachability
 and `http`/`https`/`ssh`/`telnet` or `tcp ... PORT` for service policy. Use `fail` for traffic that must be blocked.
+`udp ... PORT` proves UDP delivery or filtering only, to a port with no service: a UDP test fails when a service
+(DNS, TFTP, ...) receives it, so never use it to grade a service.
 Do not invent UDP/DNS saved-PDU encodings; they are not supported yet.
 When the request calls for weighted or partial credit, map exact statements under `[grade.points]`; keep ordinary
 items at one point and give larger weights only to outcomes that genuinely deserve more influence.

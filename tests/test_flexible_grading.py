@@ -148,6 +148,25 @@ class IPv6(unittest.TestCase):
         self.assertEqual(pdu.findtext("PDU/SRCADDR"), "2001:DB8:1::10")
         self.assertEqual(pdu.findtext("PDU/PDU/TYPE"), "CIcmpMessage")
 
+    def test_udp_is_a_type_2_pdu_like_packet_tracers_complex_pdu(self):
+        # shape copied from a Complex PDU (DNS, and OTHER/UDP port 69) saved by Packet Tracer
+        rows = [["PC1", "Fa0", "10.0.0.10/24", "10.0.0.1"], ["PC2", "Fa0", "10.0.0.1/24", ""]]
+        s = spec("udp PC1 PC2 5555", "udp PC1 PC2 7000 fail", rows=rows)
+        tests = labgen.connectivity_tests(s)
+        self.assertEqual([(t["protocol"], t["port"], t["ip"], t["succeed"]) for t in tests],
+                         [("udp", 5555, "10.0.0.1", True), ("udp", 7000, "10.0.0.1", False)])
+        answer = tree(pc("PC1"), pc("PC2"))
+        ptlab.add_connectivity_tests(answer, tests)
+        dns, tftp = answer.getroot().findall("SCENARIOSET/SCENARIO/PDU")
+        self.assertEqual((dns.findtext("TYPE"), dns.find("TYPE").get("patterned")), ("2", "no"))
+        self.assertEqual(dns.findtext("DESTINATION"), "10.0.0.1")
+        self.assertEqual(dns.findtext("PDU/SRCADDR"), "10.0.0.10")
+        self.assertEqual(dns.findtext("PDU/TTL"), "32")
+        self.assertEqual([dns.findtext("PDU/PDU/" + t) for t in ("TYPE", "SRC", "DST", "LENGTH")],
+                         ["CUdpHeader", "5000", "5555", "8"])
+        self.assertEqual(tftp.findtext("PDU/PDU/DST"), "7000")
+        self.assertEqual(tftp.findtext("TEST_CONDITION"), "2")
+
 
 def _chains(node, path=()):
     path = path + (node,)

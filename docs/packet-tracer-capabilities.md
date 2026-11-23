@@ -19,7 +19,7 @@ not yet confirmed live; **open** = available in Packet Tracer, not used yet.
 | Points and components per item | weight items; group the score by Ip/Routing/Switching/Physical/Other | `POINTS`, `COMPONENTS` | used: configurable positive integer weights per statement |
 | Per-item feedback | a hint shown next to each **incorrect** item in Check Results | `NAME incorrectFeedback` | used: automatic and per-item overrides |
 | Connectivity tests | Realtime PDUs sent at Check Results, expected to succeed or fail | PDUs in the answer network's first scenario, `TEST_CONDITION` 3/2 | used (ping); ping6 (type 20) built, live pending |
-| Complex-PDU tests | the same with a TCP PDU to a port (HTTP 80, HTTPS 443, SSH 22, Telnet 23, or explicit port) | same scenario, complex PDU | used: HTTP pass and HTTPS blocked confirmed live; UDP/DNS unknown |
+| Complex-PDU tests | the same with a TCP PDU to a port (HTTP 80, HTTPS 443, SSH 22, Telnet 23, or explicit port) | same scenario, complex PDU | used: HTTP pass and HTTPS blocked confirmed live. UDP (type 2): passes only to a port with no service; a listening DNS/TFTP service makes it fail (live), so it grades delivery and filtering, not services |
 | Overall feedback | message when complete / incomplete (HTML) | `OVERALL_COMPLETE_FEEDBACK`, `OVERALL_INCOMPLETE_FEEDBACK` | used (generic); custom per-lab text built |
 | Dynamic feedback | live "Completion: x %" while working | `DYNAMIC_PERCENTAGE_FEEDBACK` | used |
 | Timer | elapsed time, a countdown limit, or none | `ACTIVITY TIMERTYPE` (0 elapsed, 1 countdown, 2 none), `COUNTDOWNMS`, `COUNTDOWNLEFT` | used: countdown confirmed live (Time Left); expiry behaviour pending |

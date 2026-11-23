@@ -65,7 +65,7 @@ ptlab models
 Grading is native Packet Tracer Check Results: addresses (IPv4 and IPv6), interface state, gateways, VLANs and
 trunks, static/OSPF routing, port security, PortFast, NAT, ACL placement, HSRP, DHCP pools, enable secrets, local
 users, banners, descriptions, any running-config line, cables, and connectivity tests (ping, ping6, TCP services,
-including traffic that must be blocked). Where a task leaves a choice, items accept every right answer: any host
+UDP delivery, including traffic that must be blocked). Where a task leaves a choice, items accept every right answer: any host
 address in a subnet, either of two gateways, a description that mentions a word.
 
 Prove a built lab the way Packet Tracer reads it: open it in Packet Tracer, save a copy, then

@@ -696,26 +696,32 @@ def add_connectivity_tests(answer_tree, tests):
         pdu = ET.SubElement(scen, "PDU")
         if protocol == "tcp":
             ET.SubElement(pdu, "TYPE", {"name": "", "start": "3000", "patterned": "yes"}).text = "1"
+        elif protocol == "udp":   # as saved by Packet Tracer's Complex PDU dialog (DNS or OTHER/UDP): type 2
+            ET.SubElement(pdu, "TYPE", {"patterned": "no"}).text = "2"
         else:   # 0 = ICMP echo, 20 = ICMPv6 echo (same nested CIpHeader/CIcmpMessage, IPv6 addresses)
             ET.SubElement(pdu, "TYPE", {"patterned": "no"}).text = "20" if protocol == "icmp6" else "0"
         ET.SubElement(pdu, "CUSTOM_TYPE")
         ET.SubElement(pdu, "SOURCE").text = devs[t["src"]].findtext("ENGINE/SAVE_REF_ID")
         ET.SubElement(pdu, "PORT")
-        if protocol in ("tcp", "icmp6"):
+        if protocol in ("tcp", "udp", "icmp6"):
             ET.SubElement(pdu, "DESTINATION").text = t["ip"]
         else:
             ET.SubElement(pdu, "DESTINATION", {"device": devs[t["dst"]].findtext("ENGINE/SAVE_REF_ID")})
         ET.SubElement(pdu, "COLOR").text = "-8664361" if t["succeed"] else "-3394765"
         ip = ET.SubElement(pdu, "PDU")
         ET.SubElement(ip, "TYPE").text = "CIpHeader"
-        ET.SubElement(ip, "SRCADDR").text = t.get("src_ip", "") if protocol in ("tcp", "icmp6") else ""
+        ET.SubElement(ip, "SRCADDR").text = t.get("src_ip", "") if protocol in ("tcp", "udp", "icmp6") else ""
         ET.SubElement(ip, "DSTADDR").text = t["ip"]
         ET.SubElement(ip, "PROTOCOL")
-        ET.SubElement(ip, "TTL").text = "32" if protocol == "tcp" else "255"
+        ET.SubElement(ip, "TTL").text = "32" if protocol in ("tcp", "udp") else "255"
         body = ET.SubElement(ip, "PDU")
         if protocol == "tcp":
             for tag, val in (("TYPE", "CTcpHeader"), ("SRC", "5000"), ("DST", str(t["port"])),
                              ("CHK", "0"), ("LENGTH", "136")):
+                ET.SubElement(body, tag).text = val
+        elif protocol == "udp":
+            for tag, val in (("TYPE", "CUdpHeader"), ("SRC", "5000"), ("DST", str(t["port"])),
+                             ("CHK", "0"), ("LENGTH", "8")):
                 ET.SubElement(body, tag).text = val
         else:
             for tag, val in (("TYPE", "CIcmpMessage"), ("ICMPTYPE", "8"), ("CODE", "0"), ("ID", "0"),

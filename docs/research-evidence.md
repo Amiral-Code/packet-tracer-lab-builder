@@ -173,5 +173,24 @@ Live-confirmed 2026-11-23 with Check Results on `feature-probe-2.pka` (40/40 ite
 - A wrong entry stays red as it should: with FE80::1 typed into PC2's *link-local* field and no global address,
   the three IPv6 items and ping6 failed.
 
+UDP connectivity tests (2026-11-23):
+
+- A Complex PDU saved by the user (application DNS, and OTHER/UDP port 69) is stored as scenario `PDU` with
+  `TYPE patterned="no"` `2`, `DESTINATION` as address text, and a `CIpHeader` (`SRCADDR`, `DSTADDR`, `TTL` 32)
+  holding a `CUdpHeader` (`SRC` 5000, `DST` port, `CHK` 0, `LENGTH` 8). Choosing "DNS" only sets the port.
+- Built that way, five tests survived Packet Tracer's own save unchanged.
+- Live Check Results on `udp-probe.pka` (PC1 -> SRV1, default services):
+
+  | Test | DNS off | DNS on |
+  |---|---|---|
+  | ping | pass | pass |
+  | UDP/53 | pass | **fail** |
+  | UDP/69 (TFTP, on by default) | fail | fail |
+  | UDP/5555 (no service) | pass | pass |
+  | UDP/53 to a missing host, expected to fail | pass | pass |
+
+  Inference: the empty-payload PDU counts as delivered at a closed port, and as failed when a service consumes and
+  rejects it. UDP tests are therefore used for delivery and filtering only.
+
 Still open: whether Check Results compares the stored value or the answer network's value for non-pattern items.
 They are identical for every generated item, so it does not affect grading.

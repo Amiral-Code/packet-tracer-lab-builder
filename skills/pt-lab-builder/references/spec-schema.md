@@ -139,6 +139,13 @@ Grading statements (one string each; quote multi-word fields of `in` with double
 | `https SRC DST [A.B.C.D] [fail]` | TCP/443 outcome | Connectivity Tests tab, complex PDU |
 | `ssh SRC DST [A.B.C.D] [fail]` | TCP/22 outcome | Connectivity Tests tab, complex PDU |
 | `telnet SRC DST [A.B.C.D] [fail]` | TCP/23 outcome | Connectivity Tests tab, complex PDU |
+| `udp SRC DST PORT [A.B.C.D] [fail]` | UDP delivery to a port with **no service** (reachability, ACL filtering) | Connectivity Tests tab, complex PDU |
+
+A UDP test cannot grade a service. Its PDU has no payload, and Packet Tracer counts it as successful when it is
+delivered to a port where nothing listens, but as failed when a service such as DNS or TFTP receives it (live
+Check Results, 2026-11-23: with DNS switched on, UDP/53 turned from pass to fail). Lint therefore refuses `udp`
+to well-known service ports (DNS, DHCP, TFTP, NTP, SNMP, Syslog, RADIUS, TACACS+, CAPWAP). Use it to prove that
+UDP traffic gets through, or is blocked by an ACL (`fail`), on a port with no service.
 
 ```toml
 [grade]

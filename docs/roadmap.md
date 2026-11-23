@@ -76,7 +76,11 @@ Live-confirmed 2026-11-23 (`feature-probe-2.pka`, Check Results **40/40**, Conne
 | IPv6 items and ping6 | all IPv6 items green, ping6 PC2 to SRV1 passes |
 | Port security, NAT, HSRP, DHCP pool, secrets | every item green, including the generated enable-secret hash and the local user |
 
-Still open: **UDP/DNS tests** need a saved UDP PDU (build one in Packet Tracer and save it).
+- ~~**UDP tests**~~ `udp SRC DST PORT [fail]`, copied from a Complex PDU the user saved (type 2, `CUdpHeader`).
+  Live probe (`udp-probe.pka`): UDP to a port with no service passes, UDP to an unreachable host fails as expected,
+  but UDP to a listening service fails (DNS on: UDP/53 pass -> fail; TFTP/69 always fails). So there is no `dns`
+  test: lint refuses UDP to service ports. Grading a DNS server needs its records as assessment items, which waits
+  for a real file that grades them.
 
 ## Iteration 3: devices and modules
 

@@ -82,6 +82,10 @@ class LintTests(unittest.TestCase):
         self.assertError(lambda s: s["grade"]["items"].append("in R1 interface G0/0 no shutdown"), "quote both")
         self.assertError(lambda s: s["grade"]["items"].append("ping PC1 SW1"), "no address")
         self.assertError(lambda s: s["grade"]["items"].append("tcp PC1 R1 70000"), "1-65535")
+        self.assertError(lambda s: s["grade"]["items"].append("udp PC1 R1 0"), "UDP port must be 1-65535")
+        self.assertError(lambda s: s["grade"]["items"].append("udp PC1 R1"), "udp SRC DST PORT")
+        self.assertError(lambda s: s["grade"]["items"].append("udp PC1 R1 53"), "UDP/53 is DNS")
+        self.assertError(lambda s: s["grade"]["items"].append("dns PC1 R1"), "unknown")
         self.assertError(lambda s: s["grade"]["items"].append("https PC1 NOPE"), "unknown device")
 
     def test_iteration_2_statements(self):

@@ -492,7 +492,13 @@ def pcs_for(spec, which):
 
 # ---------------------------------------------------------------- grading statements
 TCP_PORTS = {"http": 80, "https": 443, "ssh": 22, "telnet": 23}
-CONNECTIVITY_STATEMENTS = ("ping", "ping6", "tcp", *TCP_PORTS)
+# A UDP test PDU carries no payload. Live Check Results (2026-11-23): it counts as successful when it is delivered
+# to a port with NO service listening, and as failed when a service (DNS, TFTP...) receives it. So it proves
+# delivery and filtering only, never that a service works: no "dns"/"tftp" aliases, and service ports are refused.
+UDP_SERVICE_PORTS = {53: "DNS", 67: "DHCP", 68: "DHCP", 69: "TFTP", 123: "NTP", 161: "SNMP", 162: "SNMP traps",
+                     514: "Syslog", 1812: "RADIUS", 1813: "RADIUS", 1645: "RADIUS", 1646: "RADIUS",
+                     49: "TACACS+", 5246: "CAPWAP", 5247: "CAPWAP"}
+CONNECTIVITY_STATEMENTS = ("ping", "ping6", "tcp", *TCP_PORTS, "udp")
 GRADE_STATEMENTS = ("ip", "ip6", "up", "gw", "gw6", "hostname", "line", "in", "dhcp", "vlan", "access", "trunk",
                     "route", "route6", "ospf", "rid", "passive", "stp", "portfast", "portsec", "desc", "banner",
                     "nat", "acl", "hsrp", "pool", "secret", "user", *CONNECTIVITY_STATEMENTS, "cable")
@@ -576,7 +582,7 @@ def first_addresses(spec):
 
 
 def connectivity_tests(spec):
-    """Compile ICMP, ICMPv6 and TCP outcome statements for Packet Tracer's Connectivity Tests tab."""
+    """Compile ICMP, ICMPv6, TCP and UDP outcome statements for Packet Tracer's Connectivity Tests tab."""
     first, first6 = first_addresses(spec)
     tests = []
     points = spec.get("grade", {}).get("points", {})
@@ -585,10 +591,10 @@ def connectivity_tests(spec):
         if w[0] not in CONNECTIVITY_STATEMENTS:
             continue
         kind = w[0]
-        protocol = {"ping": "icmp", "ping6": "icmp6"}.get(kind, "tcp")
+        protocol = {"ping": "icmp", "ping6": "icmp6", "udp": "udp"}.get(kind, "tcp")
         port = None
         rest_at = 3
-        if kind == "tcp":
+        if kind in ("tcp", "udp"):
             port = int(w[3])
             rest_at = 4
         elif kind in TCP_PORTS:
@@ -605,9 +611,10 @@ def connectivity_tests(spec):
                 "src_ip": table.get(w[1], ""), "points": points.get(st, 1)}
         if protocol == "icmp6":
             test["desc"] = f"{w[1]} {'can' if succeed else 'cannot'} ping {w[2]} ({ip}, IPv6)"
-        elif protocol == "tcp":
+        elif protocol in ("tcp", "udp"):
             test["port"] = port
-            test["desc"] = f"{w[1]} {'can' if succeed else 'cannot'} open TCP/{port} on {w[2]} ({ip})"
+            verb = "open TCP" if protocol == "tcp" else "send UDP"
+            test["desc"] = f"{w[1]} {'can' if succeed else 'cannot'} {verb}/{port} on {w[2]} ({ip})"
         else:
             test["desc"] = f"{w[1]} {'can' if succeed else 'cannot'} ping {w[2]} ({ip})"
         tests.append(test)

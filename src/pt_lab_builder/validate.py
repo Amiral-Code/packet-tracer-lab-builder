@@ -330,7 +330,7 @@ def lint(spec) -> Issues:
     outcome = [k for k in kinds if k in labgen.CONNECTIVITY_STATEMENTS]
     config = [k for k in kinds if k not in labgen.CONNECTIVITY_STATEMENTS and k not in ("up", "cable")]
     if statements and not outcome:
-        issues.warn("grade: only configuration is graded; add ping/tcp tests so a working network is also proven")
+        issues.warn("grade: only configuration is graded; add ping/tcp/udp tests so a working network is also proven")
     elif statements and not config and not any(lk.get("student") for lk in spec.get("link", [])):
         issues.warn("grade: only outcomes are graded; add configuration items so partial work earns partial credit "
                     "and Check Results can point at what is wrong")
@@ -469,15 +469,19 @@ def _statement_problem(w, st, model, ports, first_addr, first_addr6=()):
                 if labgen.long_if(port) not in ports[dev]:
                     return f"{dev} has no port {labgen.long_if(port)}"
         if k in labgen.CONNECTIVITY_STATEMENTS:
-            base = 4 if k == "tcp" else 3
-            syntax = ("tcp SRC DST PORT [A.B.C.D] [fail]" if k == "tcp"
+            base = 4 if k in ("tcp", "udp") else 3
+            syntax = (f"{k} SRC DST PORT [A.B.C.D] [fail]" if k in ("tcp", "udp")
                       else f"{k} SRC DST [A.B.C.D] [fail]")
             if len(w) < base:
                 return f"write it as: {syntax}, with DST a device name"
             if w[2] not in model:
                 return f"unknown device {w[2]}"
-            if k == "tcp" and not 1 <= int(w[3]) <= 65535:
-                return "TCP port must be 1-65535"
+            if k in ("tcp", "udp") and not 1 <= int(w[3]) <= 65535:
+                return f"{k.upper()} port must be 1-65535"
+            if k == "udp" and int(w[3]) in labgen.UDP_SERVICE_PORTS:
+                return (f"UDP/{w[3]} is {labgen.UDP_SERVICE_PORTS[int(w[3])]}: Packet Tracer's UDP test fails when a "
+                        f"service receives it, so it cannot prove a service works; use a port with no service "
+                        f"(UDP tests prove delivery and ACL filtering only)")
             rest = w[base:]
             if rest.count("fail") > 1:
                 return "use 'fail' at most once"
@@ -494,7 +498,7 @@ def _statement_problem(w, st, model, ports, first_addr, first_addr6=()):
             if k == "ping6" and w[1] not in first_addr6:
                 return f"{w[1]} has no IPv6 address in the addressing table: ICMPv6 tests need a source address"
             if k != "ping" and w[1] not in first_addr:
-                return f"{w[1]} has no address in the addressing table: TCP tests need a source address"
+                return f"{w[1]} has no address in the addressing table: TCP and UDP tests need a source address"
     except ValueError as e:
         return str(e)
     return None
