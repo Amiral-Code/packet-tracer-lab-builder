@@ -150,6 +150,8 @@ def clone_device(root, template, name, x, y, used_macs=None):
                 p.find("BIA").text = mac
     lg = d.find("WORKSPACE/LOGICAL")
     lg.find("X").text, lg.find("Y").text = str(x), str(y)
+    if lg.find("DEVCLUSTERID") is not None:   # a cluster from the template's source file would hide the device
+        lg.find("DEVCLUSTERID").text = "1-1"  # the root view, as every device placed on the main canvas
     for t in ("MEM_ADDR", "DEV_ADDR"):
         if lg.find(t) is not None:
             lg.find(t).text = new_addr()
