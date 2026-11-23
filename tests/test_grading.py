@@ -175,6 +175,36 @@ class GradeStatements(unittest.TestCase):
         self.assertEqual((attrs["PASS"], attrs["TIMERTYPE"]), ("", "0"))
         self.assertNotIn("VALUE", attrs)
 
+    def test_existing_devices_are_rebuilt_and_locked_per_device_and_port(self):
+        locking = ET.Element("LOCKINGTREE")
+        branch = ET.SubElement(locking, "NODE", {"on": "no"})
+        ET.SubElement(branch, "ID").text = "Existing Devices"
+        stale = ET.SubElement(branch, "NODE", {"on": "no"})
+        ET.SubElement(stale, "ID").text = ET.SubElement(stale, "TEXT").text = "Router0"
+        for ident in ("Device_Remove", "Device Use Config Tab"):
+            sw = ET.SubElement(stale, "NODE", {"on": "no"})
+            ET.SubElement(sw, "ID").text = ident
+        ports = ET.SubElement(stale, "NODE", {"on": "no"})
+        ET.SubElement(ports, "ID").text = "Ports"
+        port = ET.SubElement(ports, "NODE", {"on": "no"})
+        ET.SubElement(port, "ID").text = ET.SubElement(port, "TEXT").text = "Vlan1"
+        for ident in ("Port_Remove", "Port_Connect", "Port_Disconnect"):
+            sw = ET.SubElement(port, "NODE", {"on": "no"})
+            ET.SubElement(sw, "ID").text = ident
+        for ident in ("Create Devices", "Remove Devices", "Connect Links", "Disconnect Links"):
+            sw = ET.SubElement(locking, "NODE", {"on": "no"})
+            ET.SubElement(sw, "ID").text = ident
+        ptlab.set_existing_devices(locking, {"R1": ["GigabitEthernet0/0", "GigabitEthernet0/1"], "SW1": ["Vlan1"]})
+        ptlab.apply_locking_preset(locking, "fixed-topology")
+        names = [d.findtext("ID") for d in branch.findall("NODE")]
+        self.assertEqual(names, ["R1", "SW1"])                       # the base's own devices are gone
+        r1 = branch.find("NODE")
+        self.assertEqual(r1.find("NODE[ID='Device_Remove']").get("on"), "yes")
+        self.assertEqual(r1.find("NODE[ID='Device Use Config Tab']").get("on"), "no")
+        r1_ports = r1.find("NODE[ID='Ports']").findall("NODE")
+        self.assertEqual([p.findtext("ID") for p in r1_ports], ["GigabitEthernet0/0", "GigabitEthernet0/1"])
+        self.assertTrue(all(sw.get("on") == "yes" for p in r1_ports for sw in p.findall("NODE")))
+
     def test_physical_locations_follow_the_generated_network(self):
         net = ET.Element("PACKETTRACER5")
         ws = ET.SubElement(net, "PHYSICALWORKSPACE")

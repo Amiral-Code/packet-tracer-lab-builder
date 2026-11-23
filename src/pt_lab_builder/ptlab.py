@@ -345,8 +345,12 @@ LOCKING_PRESETS = {
     "cli-only": ("Use Config Tab", "Router/Switch Config Tab", "Device Use Config Tab"),
     "realtime-only": ("Switching to Simulation",),
     "logical-only": ("Switching to Physical",),
-    # the student cannot add, delete or re-cable devices (do not combine with student cabling)
-    "fixed-topology": ("Create Devices", "Remove Devices", "Connect Links", "Disconnect Links"),
+    # the student cannot add, delete or re-cable devices (do not combine with student cabling). The global
+    # "Remove Devices" is only the editor's select-all: deleting checks each device's own Device_Remove
+    # (CSelectedItems::hasUnremovableItem, CLogicalWorkspace::handleDeleteSelections), so the per-device and
+    # per-port switches are set too.
+    "fixed-topology": ("Create Devices", "Remove Devices", "Connect Links", "Disconnect Links",
+                       "Device_Remove", "Port_Remove", "Port_Connect", "Port_Disconnect"),
     "exam": ("Use Config Tab", "Router/Switch Config Tab", "Device Use Config Tab",
              "Switching to Simulation", "View Command Log", "Copy and Paste"),
 }
@@ -367,6 +371,39 @@ def apply_locking_preset(locking_tree, preset):
     if missing:
         die(f"activity base has no locking switch(es): {', '.join(sorted(missing))}")
     return found
+
+
+def set_existing_devices(locking_tree, devices):
+    """Rebuild Topology > Existing Devices for the generated devices ({name: [port, ...]}). Packet Tracer looks
+    per-device switches up by device name, and the activity base lists its own devices; the base's first entry
+    with at least one port is the template for every device (IoT entries have an empty Ports branch)."""
+    if not devices:
+        return
+    branch = next((n for n in locking_tree.iter("NODE") if n.findtext("ID") == "Existing Devices"), None)
+    if branch is None:
+        die("the activity base has no Existing Devices locking branch")
+    template = next((d for d in branch.findall("NODE")
+                     if d.find("NODE[ID='Ports']") is not None and d.find("NODE[ID='Ports']/NODE") is not None), None)
+    if template is None:
+        die("the activity base's Existing Devices branch has no device with ports to copy")
+    port_template = template.find("NODE[ID='Ports']").find("NODE")
+    for old in branch.findall("NODE"):
+        branch.remove(old)
+    for name, ports in devices.items():
+        entry = copy.deepcopy(template)
+        for n in entry.iter("NODE"):
+            n.set("on", "no")
+        entry.find("ID").text = entry.find("TEXT").text = name
+        port_branch = entry.find("NODE[ID='Ports']")
+        for p in port_branch.findall("NODE"):
+            port_branch.remove(p)
+        for port in ports:
+            pe = copy.deepcopy(port_template)
+            for n in pe.iter("NODE"):
+                n.set("on", "no")
+            pe.find("ID").text = pe.find("TEXT").text = port
+            port_branch.append(pe)
+        branch.append(entry)
 
 
 def set_physical_locations(locking_tree, start_tree, start_location=None):
@@ -435,6 +472,7 @@ def build_pka(a, start_tree, answer_tree):
     ET.SubElement(init, "LOAD_INIT_TREE").text = "false"
     settings = a.get("activity", {})
     locking_tree = copy.deepcopy(base.find("LOCKINGTREE"))
+    set_existing_devices(locking_tree, a.get("lock_devices"))
     apply_locking_preset(locking_tree, settings.get("locking_preset", "none"))
     set_physical_locations(locking_tree, start_tree, settings.get("start_location"))
     act.append(locking_tree)

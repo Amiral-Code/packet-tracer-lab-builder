@@ -749,7 +749,8 @@ def build(path, open_after=False, output_dir=None, force=False, password=None):
         settings["incomplete_feedback_html"] = feedback_html(incomplete_feedback)
     a = {"id": 0, "title": spec["lab"]["title"], "pka_item": items, "brief": spec["lab"]["scenario"],
          "topics": spec["lab"].get("objectives", []), "level": spec["lab"].get("level", 2),
-         "time": spec["lab"].get("time", 30), "activity": settings}
+         "time": spec["lab"].get("time", 30), "activity": settings,
+         "lock_devices": {name: start.ports(name) for name in start.devices}}
     pka = ptlab.build_pka(a, start.tree, answer.tree)
     ins = pka.getroot().find("ACTIVITY/INSTRUCTIONS")
     for p in list(ins):

@@ -80,5 +80,13 @@ Static executable evidence:
   and call `CWorkspace::switchTo(path)` → `CPhysicalObject::getFromPath`. The generated location IDs match the
   scheme of real activities (cumulative UUID paths present in all three networks). The builder now switches on
   "Start in Physical Workspace" together with the location; re-check pending.
+- Per-item hints (`incorrectFeedback`) and the debrief page/complete feedback: **confirmed**.
+- Fixed topology: **failed** on the first try: the global switches were on but deleting still worked. The global
+  "Remove Devices" is referenced only by the lock-tree editor (a select-all); `CSelectedItems::hasUnremovableItem`
+  and `CLogicalWorkspace::handleDeleteSelections` call `CAppWindow::isInterfaceLocked(category, device name,
+  "Device_Remove")`. The activity base's Existing Devices branch named its own devices (IoT1…Router3), so no
+  generated device had an entry. The builder now rebuilds Existing Devices from the generated devices and ports
+  (Device_Remove, Port_Remove/Connect/Disconnect per port) and the presets switch those on; re-check pending.
+  This also makes `cli-only`'s per-device "Device Use Config Tab" effective.
 - Variable Manager authoring, regular-expression answers, scoring-model partial credit, and script modules remain
   research tasks.
