@@ -164,6 +164,14 @@ Observed in round trips (live Packet Tracer, no GUI interaction):
 - `examples/feature-probe-2.toml` (38 items over every new kind, two connectivity tests): 38/38 items kept, 2/2
   tests kept, 38/38 values identical to Packet Tracer's own, 30/30 local checks pass on Packet Tracer's answer.
 
-Still unconfirmed live (needs Check Results in the GUI): a `{{RegEx:}}` item turning green for a value other than the
-answer's, `ping6` passing, and whether Check Results compares the stored value or the answer network's value for
-non-pattern items (they are identical for every generated item, so either way they agree).
+Live-confirmed 2026-11-23 with Check Results on `feature-probe-2.pka` (40/40 items, 2/2 connectivity tests):
+
+- `{{RegEx:}}` items turn green for values other than the answer's: PC1 at 192.168.10.150 with gateway
+  192.168.10.1 (answer .10 / .254), description "Users LAN segment", banner "Only authorized staff may connect".
+- `ping6` (type-20 PDU) passes once PC2 has its global address and the link-local gateway.
+- The generated enable-secret hash, the `{user}` item, and IPv6 config lines with `:` stored as `-` all go green.
+- A wrong entry stays red as it should: with FE80::1 typed into PC2's *link-local* field and no global address,
+  the three IPv6 items and ping6 failed.
+
+Still open: whether Check Results compares the stored value or the answer network's value for non-pattern items.
+They are identical for every generated item, so it does not affect grading.

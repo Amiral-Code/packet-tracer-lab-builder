@@ -67,14 +67,14 @@ Built and proven by round trip (every item kept, every value equal to Packet Tra
 - Fixed on the way: start overlays after a global `no …` line landed in the wrong section (Northstar's CORE1 start
   network), `no ip address` did not remove the address, `in` parents with short interface names never matched.
 
-Live checklist (`feature-probe-2.pka`, about 30 minutes):
+Live-confirmed 2026-11-23 (`feature-probe-2.pka`, Check Results **40/40**, Connectivity Tests **2/2**):
 
-| Check | Pass when |
+| Check | Result |
 |---|---|
-| Several right answers | PC1 with any address in 192.168.10.0/24 (not .10) and either gateway: IP Address and Default Gateway green |
-| Description / banner wording | your own wording that mentions "LAN" / "authorized": green |
-| IPv6 items and ping6 | all IPv6 items green, Connectivity Tests 2/2 |
-| Port security, NAT, HSRP, DHCP pool, secrets | each item green after configuring it |
+| Several right answers | PC1 at 192.168.10.150 with gateway 192.168.10.1 (answer: .10 and .254): IP Address, Subnet Mask, Default Gateway green |
+| Description / banner wording | "Users LAN segment" and "Only authorized staff may connect" (not the answer text): green |
+| IPv6 items and ping6 | all IPv6 items green, ping6 PC2 to SRV1 passes |
+| Port security, NAT, HSRP, DHCP pool, secrets | every item green, including the generated enable-secret hash and the local user |
 
 Still open: **UDP/DNS tests** need a saved UDP PDU (build one in Packet Tracer and save it).
 
