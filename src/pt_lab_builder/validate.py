@@ -62,6 +62,9 @@ def _base_rack_reserved():
     return []
 
 
+CABLES = ("eStraightThrough", "eCrossOver", "eFiber", "eSerialDCE", "eSerialDTE")
+
+
 def _port_ok(ports, iface):
     """Physical ports must exist on the model; logical ones (Vlan10, Lo0, G0/0.10, Po1) are created by config."""
     if iface in ports:
@@ -161,6 +164,16 @@ def lint(spec) -> Issues:
                     issues.error(f"{ep[0]} {labgen.short_if(ep[1])} is cabled twice (links {used[ep]} and {i})")
                 used[ep] = i
                 cabled.add(ep)
+        cable = lk.get("cable")
+        if cable is not None and cable not in CABLES:
+            issues.error(f"link {i}: cable {cable!r} is not one of {', '.join(CABLES)}")
+        serial = [labgen.long_if((lk.get(side, "").split(None, 1) + [""])[1]).startswith("Serial") for side in "ab"]
+        if any(serial) and not all(serial):
+            issues.error(f"link {i}: a serial port can only be cabled to another serial port")
+        elif all(serial) and cable not in (None, "eSerialDCE", "eSerialDTE"):
+            issues.error(f"link {i}: a serial link takes cable = \"eSerialDCE\" (first end clocks) or \"eSerialDTE\"")
+        elif not any(serial) and cable in ("eSerialDCE", "eSerialDTE"):
+            issues.error(f"link {i}: {cable} needs serial ports at both ends")
 
     # multilayer-switch ports are switchports: an IP address on a physical port needs "no switchport" first
     # (IOS and Packet Tracer reject the address otherwise, and the port's assessment items are silently dropped)
@@ -315,6 +328,9 @@ def lint(spec) -> Issues:
         if problem:
             issues.error(f"grade: {st!r}: {problem}")
             continue
+        if w[0] == "clock" and labgen.serial_dce(spec).get((w[1], labgen.long_if(w[2]))) is False:
+            issues.error(f"grade: {st!r}: {w[1]} {labgen.long_if(w[2])} is the DTE end of its cable; the clock rate "
+                         f"belongs on the DCE end (or set cable = \"eSerialDTE\" on that link to swap the ends)")
         if w[0] in ("ip", "up", "ip6"):
             if len(w) < 3:
                 issues.error(f"grade: {st!r}: missing interface")
@@ -353,13 +369,14 @@ def _statement_problem(w, st, model, ports, first_addr, first_addr6=()):
     """Shape errors for one grade statement, or None."""
     k = w[0]
     need = {"ip": 5 if len(w) > 3 and w[3] == "in" else 4, "ip6": 4, "up": 3, "gw": 3, "gw6": 3, "hostname": 3,
-            "dhcp": 2, "vlan": 4, "access": 4, "route": 4, "route6": 4, "ospf": 5, "rid": 4, "passive": 4, "stp": 4,
+            "dhcp": 2, "vlan": 4, "access": 4, "route": 4, "route6": 4, "ospf": 5, "rid": 4, "passive": 4, "stp": 4, "clock": 4,
             "portfast": 3, "nat": 4, "acl": 5, "cable": 5}
     if k in need and len(w) != need[k]:
         return f"expects {need[k] - 1} fields after '{k}'"
     host = labgen.ptbuild_model_is_host(model.get(w[1], ""))
     ios_only = ("route", "route6", "ospf", "rid", "passive", "stp", "portfast", "portsec", "nat", "acl", "hsrp",
-                "pool", "secret", "user", "banner", "desc", "vlan", "access", "trunk", "line", "in", "hostname")
+                "pool", "secret", "user", "banner", "desc", "vlan", "access", "trunk", "line", "in", "hostname",
+                "clock")
     if host and k in ios_only:
         return f"{w[1]} is a host; '{k}' grades IOS configuration"
     if not host and k in ("gw", "gw6", "dhcp"):
@@ -385,7 +402,12 @@ def _statement_problem(w, st, model, ports, first_addr, first_addr6=()):
         if k == "gw":
             for a in w[2].split("|"):
                 ipaddress.IPv4Address(a)
-        if k in ("ip", "ip6", "portfast", "portsec", "desc", "nat", "acl", "hsrp") and len(w) > 2:
+        if k == "clock":
+            if not labgen.long_if(w[2]).startswith("Serial"):
+                return "clock rate is set on a serial interface"
+            if int(w[3]) not in labgen.CLOCK_RATES:
+                return f"{w[3]} is not a clock rate IOS accepts ({', '.join(map(str, labgen.CLOCK_RATES))})"
+        if k in ("ip", "ip6", "portfast", "portsec", "desc", "nat", "acl", "hsrp", "clock") and len(w) > 2:
             if not _port_ok(ports[w[1]], labgen.long_if(w[2])):
                 return f"{w[1]} has no port {labgen.long_if(w[2])}"
         if k == "rid":

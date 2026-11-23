@@ -85,7 +85,8 @@ CLOSET_ICON = (40, 40, 400, 400)          # x1, y1, x2, y2 the closet icon cover
 
 
 def rack_units(key):
-    return RACK_UNITS.get(key, DEFAULT_RACK_UNITS)
+    # a variant with interface cards fitted (router-1941-serial) has its base model's chassis
+    return RACK_UNITS.get(key, RACK_UNITS.get(key.removesuffix("-serial"), DEFAULT_RACK_UNITS))
 
 
 def stack_rack(entries, reserved=()):
@@ -186,7 +187,15 @@ def link(root, dev_a, port_a, dev_b, port_b, cable="eStraightThrough", kind="eCo
     for t in ("FROM_PORT_MEM_ADDR", "TO_PORT_MEM_ADDR"):
         if c.find(t) is not None:
             c.find(t).text = new_addr()
-    if c.find("TYPE") is not None:
+    if kind == "eSerial":
+        # Packet Tracer stores a serial link with no cable TYPE: DCEDEV/DCEPORT name the end that clocks the line.
+        # eSerialDCE = the first end (a) is DCE, eSerialDTE = the first end is DTE.
+        if c.find("TYPE") is not None:
+            c.remove(c.find("TYPE"))
+        dce_dev, dce_port = (dev_a, port_a) if cable == "eSerialDCE" else (dev_b, port_b)
+        ET.SubElement(c, "DCEDEV").text = dce_dev.findtext("ENGINE/SAVE_REF_ID")
+        ET.SubElement(c, "DCEPORT").text = dce_port
+    elif c.find("TYPE") is not None:
         c.find("TYPE").text = cable
     root.find("NETWORK/LINKS").append(lk)
     return lk

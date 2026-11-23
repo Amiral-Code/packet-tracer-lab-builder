@@ -200,3 +200,24 @@ UDP connectivity tests (2026-11-23):
 
 Still open: whether Check Results compares the stored value or the answer network's value for non-pattern items.
 They are identical for every generated item, so it does not affect grading.
+
+## Iteration 3: serial WAN (2026-11-23)
+
+Observed in the 93 decoded activities:
+
+- Interface cards fitted in routers: 1941 + HWIC-2T (111 devices), ISR4321 + NIM-2T (54), 2911 + HWIC-2T (27),
+  1841 + WIC-2T (9), ISR4331 + NIM-2T (9), ISR4331 + NIM-ES2-4 (15), 2911 + HWIC-1GE-SFP (6). A card is a
+  `MODULE` (`TYPE` eInterfaceCard, `MODEL`) in a `SLOT` of the router's module tree, holding its own `PORT`s
+  (`eSmartSerial`, with `CLOCKRATE`). Empty slots hold `WIC-Cover`/`NIM-Cover`.
+- A serial `LINK` has `TYPE` eSerial and **no** cable `TYPE`; `DCEDEV`/`DCEPORT` name the DCE end
+  (Packet Tracer 7.2 to 8.x, `IS_MANAGED_IN_RACK_VIEW` from 8.0).
+- Running-configs show ` clock rate 2000000` on serial interfaces by default, on both ends; the DCE end shows
+  the configured rate. No activity grades clock rate natively: it is graded as a config line.
+- Generic devices carry user-changed module sets: Router-PT and Cloud-PT templates are therefore only taken
+  with Packet Tracer's stock fit.
+
+Implemented: `-serial` library variants taken whole from those files, serial links in the format above, `clock`
+statement, lint for serial pairing and DCE ends. `examples/serial-wan-triangle.toml` (ISR4321 + two 1941s, three
+serial links): 32/32 items and 3/3 tests kept by Packet Tracer's own save, 32/32 values identical to Packet
+Tracer's own, 23/23 local checks on its answer network, and all three serial links kept with their DCE ends.
+Pending live check: links up and Check Results green after configuring.

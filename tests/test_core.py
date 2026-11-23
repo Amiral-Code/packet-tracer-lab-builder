@@ -63,6 +63,45 @@ class CoreTests(unittest.TestCase):
         self.assertNotIn(" ipv6 address 2001:DB8:10::1/64", out)
         self.assertNotIn("ip routing", out)
 
+    def test_fitted_cards_select_a_serial_variant_and_plain_keys_need_no_card(self):
+        def router(model, cards=(), modules=()):
+            d = ET.fromstring(f'<DEVICE><ENGINE><TYPE model="{model}">Router</TYPE></ENGINE><MODULE/></DEVICE>')
+            for typ, names in (("eInterfaceCard", cards), ("ePtRouterModule", modules)):
+                for name in names:
+                    m = ET.SubElement(d.find("MODULE"), "MODULE")
+                    ET.SubElement(m, "TYPE").text = typ
+                    ET.SubElement(m, "MODEL").text = name
+            return d
+        self.assertEqual(library.library_key(router("1941")), "router-1941")
+        self.assertEqual(library.library_key(router("1941", ["HWIC-2T", "WIC-Cover"])), "router-1941-serial")
+        self.assertIsNone(library.library_key(router("1941", ["HWIC-2T", "HWIC-2T"])))   # no such variant
+        self.assertEqual(library.library_key(router("ISR4331", ["NIM-2T"])), "router-isr4331-serial")
+        stock = library.STOCK_PT_MODULES["Router-PT"]
+        self.assertEqual(library.library_key(router("Router-PT", modules=stock)), "router-pt")
+        self.assertIsNone(library.library_key(router("Router-PT", modules=stock[:-1])))
+
+    def test_serial_link_names_the_dce_end_and_has_no_cable_type(self):
+        from pt_lab_builder import ptbuild
+        root = ET.fromstring("<PACKETTRACER5><NETWORK><DEVICES/><LINKS/></NETWORK></PACKETTRACER5>")
+        devs = []
+        for i, name in enumerate(("R1", "R2")):
+            d = ET.fromstring(f"<DEVICE><ENGINE><NAME>{name}</NAME><SAVE_REF_ID>save-ref-id:{i}</SAVE_REF_ID>"
+                              f"</ENGINE><WORKSPACE><LOGICAL><DEV_ADDR>{i}</DEV_ADDR></LOGICAL></WORKSPACE></DEVICE>")
+            root.find("NETWORK/DEVICES").append(d)
+            devs.append(d)
+        tpl = ET.fromstring(ptbuild.LINK_TEMPLATE)
+        lk = ptbuild.link(root, devs[0], "Serial0/0/0", devs[1], "Serial0/0/1", cable="eSerialDTE", kind="eSerial", like=tpl)
+        c = lk.find("CABLE")
+        self.assertEqual(lk.findtext("TYPE"), "eSerial")
+        self.assertIsNone(c.find("TYPE"))
+        self.assertEqual((c.findtext("DCEDEV"), c.findtext("DCEPORT")), ("save-ref-id:1", "Serial0/0/1"))
+        from pt_lab_builder import ptlab
+        links = ptlab.cables(ET.ElementTree(root))
+        self.assertTrue(ptlab.run_check({"cable": ("R2", "Serial0/0/1", "R1", "Serial0/0/0"),
+                                         "cable_type": "eSerialDCE"}, {}, links))
+        self.assertFalse(ptlab.run_check({"cable": ("R1", "Serial0/0/0", "R2", "Serial0/0/1"),
+                                          "cable_type": "eSerialDCE"}, {}, links))
+
     def test_data_directory_override(self):
         with tempfile.TemporaryDirectory() as directory:
             old = os.environ.get("PTLAB_DATA_DIR")

@@ -205,7 +205,10 @@ def cables(tree):
         ports = [p.text for p in c.findall("PORT")]
         if len(ports) == 2:
             ends = frozenset({(names.get(c.findtext("FROM")), ports[0]), (names.get(c.findtext("TO")), ports[1])})
-            out[ends] = c.findall("TYPE")[-1].text if c.findall("TYPE") else None
+            if c.findtext("DCEDEV"):   # serial: no cable TYPE, the DCE end is named instead
+                out[ends] = ("eSerial", names.get(c.findtext("DCEDEV")), c.findtext("DCEPORT"))
+            else:
+                out[ends] = c.findall("TYPE")[-1].text if c.findall("TYPE") else None
     return out
 
 
@@ -215,6 +218,8 @@ def run_check(c, devs, links=None):
     if "cable" in c:  # a cable between exactly these two ports, of the expected type when one is given
         (a, pa, b, pb), want = c["cable"], c.get("cable_type")
         got = (links or {}).get(frozenset({(a, pa), (b, pb)}), False)
+        if want in ("eSerialDCE", "eSerialDTE"):   # a serial cable with the DCE end where the plan puts it
+            return got == ("eSerial", *((a, pa) if want == "eSerialDCE" else (b, pb)))
         return got is not False and (want is None or got == want)
     d = devs.get(c["device"])
     if d is None:

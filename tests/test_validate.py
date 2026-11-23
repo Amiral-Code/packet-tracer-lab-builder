@@ -85,6 +85,11 @@ class LintTests(unittest.TestCase):
         self.assertError(lambda s: s["grade"]["items"].append("udp PC1 R1 0"), "UDP port must be 1-65535")
         self.assertError(lambda s: s["grade"]["items"].append("udp PC1 R1"), "udp SRC DST PORT")
         self.assertError(lambda s: s["grade"]["items"].append("udp PC1 R1 53"), "UDP/53 is DNS")
+        self.assertError(lambda s: s["grade"]["items"].append("clock R1 G0/0 64000"), "serial interface")
+        self.assertError(lambda s: s["link"].append({"a": "R1 G0/1", "b": "PC1 Fa0", "cable": "eSerialDCE"}),
+                         "serial ports at both ends")
+        self.assertError(lambda s: s["link"].append({"a": "R1 G0/1", "b": "PC1 Fa0", "cable": "eCoax"}),
+                         "is not one of")
         self.assertError(lambda s: s["grade"]["items"].append("dns PC1 R1"), "unknown")
         self.assertError(lambda s: s["grade"]["items"].append("https PC1 NOPE"), "unknown device")
 

@@ -20,7 +20,7 @@ For the TOML structure, grading statements, device/link rules, and known seriali
 
 Grade with the most specific statement (`access`, `trunk`, `vlan`, `route`, `ospf`, `stp`, `ip`, `up`, `gw`, and
 `ip6`, `gw6`, `route6`, `rid`, `passive`, `portfast`, `portsec`, `desc`, `banner`, `nat`, `acl`, `hsrp`, `pool`,
-`secret`, `user`) and use `line` only for unindented running-config lines; anything inside a section needs
+`secret`, `user`, `clock`) and use `line` only for unindented running-config lines; anything inside a section needs
 `in DEV "PARENT" "LINE"`. When the task leaves the student a choice, grade the choice, not one answer:
 `ip DEV IFACE in NET/LEN` (any host address), `gw HOST A|B` (either gateway), `desc DEV IFACE ~word` or `any`,
 `banner DEV ~word`. IPv6 is fully supported, including hosts (a second addressing row) and `ping6`.
@@ -28,6 +28,8 @@ Add connectivity tests for the outcomes the lab is about, on top of the config i
 and `http`/`https`/`ssh`/`telnet` or `tcp ... PORT` for service policy. Use `fail` for traffic that must be blocked.
 `udp ... PORT` proves UDP delivery or filtering only, to a port with no service: a UDP test fails when a service
 (DNS, TFTP, ...) receives it, so never use it to grade a service.
+Serial WAN labs use the `-serial` models (`ptlab models`); the first end of a serial link is the DCE, and
+`clock DEV SERIAL RATE` grades its clock rate.
 Do not invent UDP/DNS saved-PDU encodings; they are not supported yet.
 When the request calls for weighted or partial credit, map exact statements under `[grade.points]`; keep ordinary
 items at one point and give larger weights only to outcomes that genuinely deserve more influence.

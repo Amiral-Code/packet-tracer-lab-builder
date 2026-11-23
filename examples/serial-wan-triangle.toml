@@ -1,0 +1,244 @@
+[lab]
+id = "serial-wan-triangle"
+title = "Leased Lines: A Three-Site Serial WAN"
+level = 2
+kind = "configure"
+exam = "CCNA 1.3 / 3.4 - serial interfaces (DCE/DTE, clock rate), single-area OSPFv2"
+time = 40
+scenario = """
+Atlas Logistics joins its head office and two depots with leased serial lines in a triangle, so any one line
+can fail without cutting a site off. The routers are cabled and the LAN hosts are addressed, but the routers
+are still in their factory state.
+
+Address the routers, clock the lines from the provider side (the **DCE** end of each cable), and run OSPF so
+traffic finds its own way round the triangle.
+"""
+objectives = [
+  "Identify the DCE end of a serial cable and set its clock rate",
+  "Address and enable serial and Ethernet router interfaces",
+  "Configure single-area OSPFv2 on point-to-point serial links",
+  "Verify reachability and the redundant path",
+]
+
+[[device]]
+name = "HQ"
+model = "router-isr4321-serial"
+x = 420
+y = 120
+[[device]]
+name = "DEPOT1"
+model = "router-1941-serial"
+x = 200
+y = 330
+[[device]]
+name = "DEPOT2"
+model = "router-1941-serial"
+x = 640
+y = 330
+[[device]]
+name = "HQ-SW"
+model = "switch-2960"
+x = 420
+y = 20
+[[device]]
+name = "HQ-PC"
+model = "pc"
+x = 560
+y = 20
+[[device]]
+name = "D1-PC"
+model = "pc"
+x = 80
+y = 450
+[[device]]
+name = "D2-PC"
+model = "pc"
+x = 760
+y = 450
+
+# the first end of each serial link is the DCE (it supplies the clock)
+[[link]]
+a = "HQ S0/1/0"
+b = "DEPOT1 S0/0/0"
+[[link]]
+a = "HQ S0/1/1"
+b = "DEPOT2 S0/0/0"
+[[link]]
+a = "DEPOT1 S0/0/1"
+b = "DEPOT2 S0/0/1"
+[[link]]
+a = "HQ G0/0/0"
+b = "HQ-SW G0/1"
+[[link]]
+a = "HQ-SW Fa0/1"
+b = "HQ-PC Fa0"
+[[link]]
+a = "DEPOT1 G0/0"
+b = "D1-PC Fa0"
+[[link]]
+a = "DEPOT2 G0/0"
+b = "D2-PC Fa0"
+
+[[area]]
+label = "HQ  -  192.168.1.0/24"
+color = "cyan"
+devices = ["HQ", "HQ-SW", "HQ-PC"]
+[[area]]
+label = "DEPOT 1  -  192.168.2.0/24"
+color = "yellow"
+devices = ["DEPOT1", "D1-PC"]
+[[area]]
+label = "DEPOT 2  -  192.168.3.0/24"
+color = "green"
+devices = ["DEPOT2", "D2-PC"]
+
+[addressing]
+rows = [
+  ["HQ",     "G0/0/0", "192.168.1.1/24", ""],
+  ["HQ",     "S0/1/0", "10.1.1.1/30",    ""],
+  ["HQ",     "S0/1/1", "10.1.2.1/30",    ""],
+  ["DEPOT1", "G0/0",   "192.168.2.1/24", ""],
+  ["DEPOT1", "S0/0/0", "10.1.1.2/30",    ""],
+  ["DEPOT1", "S0/0/1", "10.1.3.1/30",    ""],
+  ["DEPOT2", "G0/0",   "192.168.3.1/24", ""],
+  ["DEPOT2", "S0/0/0", "10.1.2.2/30",    ""],
+  ["DEPOT2", "S0/0/1", "10.1.3.2/30",    ""],
+  ["HQ-PC",  "Fa0",    "192.168.1.10/24", "192.168.1.1"],
+  ["D1-PC",  "Fa0",    "192.168.2.10/24", "192.168.2.1"],
+  ["D2-PC",  "Fa0",    "192.168.3.10/24", "192.168.3.1"],
+]
+
+[config.answer]
+HQ = """
+hostname HQ
+interface G0/0/0
+ ip address 192.168.1.1 255.255.255.0
+ no shutdown
+interface S0/1/0
+ description Leased line to DEPOT1
+ ip address 10.1.1.1 255.255.255.252
+ clock rate 128000
+ no shutdown
+interface S0/1/1
+ description Leased line to DEPOT2
+ ip address 10.1.2.1 255.255.255.252
+ clock rate 128000
+ no shutdown
+router ospf 1
+ router-id 1.1.1.1
+ network 192.168.1.0 0.0.0.255 area 0
+ network 10.1.1.0 0.0.0.3 area 0
+ network 10.1.2.0 0.0.0.3 area 0
+"""
+DEPOT1 = """
+hostname DEPOT1
+interface G0/0
+ ip address 192.168.2.1 255.255.255.0
+ no shutdown
+interface S0/0/0
+ ip address 10.1.1.2 255.255.255.252
+ no shutdown
+interface S0/0/1
+ description Backup line to DEPOT2
+ ip address 10.1.3.1 255.255.255.252
+ clock rate 64000
+ no shutdown
+router ospf 1
+ router-id 2.2.2.2
+ network 192.168.2.0 0.0.0.255 area 0
+ network 10.1.1.0 0.0.0.3 area 0
+ network 10.1.3.0 0.0.0.3 area 0
+"""
+DEPOT2 = """
+hostname DEPOT2
+interface G0/0
+ ip address 192.168.3.1 255.255.255.0
+ no shutdown
+interface S0/0/0
+ ip address 10.1.2.2 255.255.255.252
+ no shutdown
+interface S0/0/1
+ ip address 10.1.3.2 255.255.255.252
+ no shutdown
+router ospf 1
+ router-id 3.3.3.3
+ network 192.168.3.0 0.0.0.255 area 0
+ network 10.1.2.0 0.0.0.3 area 0
+ network 10.1.3.0 0.0.0.3 area 0
+"""
+
+[[part]]
+title = "Find the DCE ends"
+intro = "Only the DCE end of a serial cable supplies the clock. Which end that is depends on the cable, not the router."
+steps = [
+  "On each router run `show controllers serial` for every serial port (on the ISR4321: `show controllers serial 0/1/0`). Note which ports say **DCE**.",
+  "Hover the serial cables in the topology: the clock symbol marks the DCE end.",
+]
+hint = "Three cables, three DCE ends: HQ has two of them, one depot has the third."
+why = "A clock rate on a DTE port is accepted but does nothing; a line without a clock on its DCE end never comes up on real hardware."
+
+[[part]]
+title = "Address and clock the lines"
+intro = "Use the addressing table. Leased lines to the depots run at 128 kbit/s; the backup line between the depots at 64 kbit/s."
+steps = [
+  "Address and enable every serial and Gigabit interface in the table.",
+  "On each **DCE** end set the clock rate: `clock rate 128000` on HQ's two lines, `clock rate 64000` on the depot-to-depot line.",
+  "Describe HQ's lines so they name the depot they reach, and DEPOT1's backup line so it says **backup**.",
+  "Check: `show ip interface brief` shows every serial line up/up; ping across each /30.",
+]
+hint = "If a line stays down/down, check that both ends are enabled with `no shutdown`."
+why = "Point-to-point links use /30 networks: two usable addresses, one per router."
+
+[[part]]
+title = "Route round the triangle"
+intro = "OSPF process 1, everything in area 0, router IDs 1.1.1.1, 2.2.2.2 and 3.3.3.3."
+steps = [
+  "On each router, advertise its LAN and both of its serial networks in area 0.",
+  "Check: `show ip ospf neighbor` lists two neighbours on every router; `show ip route ospf`.",
+  "Ping D2-PC from D1-PC, then shut DEPOT1 S0/0/1 and ping again: traffic now goes through HQ.",
+]
+hint = "A /30 network statement uses wildcard 0.0.0.3."
+why = "The triangle gives each depot two paths; OSPF picks the cheaper one and fails over by itself."
+
+[grade]
+items = [
+  "ip HQ S0/1/0 10.1.1.1/30",
+  "ip HQ S0/1/1 10.1.2.1/30",
+  "ip DEPOT1 S0/0/0 10.1.1.2/30",
+  "ip DEPOT1 S0/0/1 10.1.3.1/30",
+  "ip DEPOT2 S0/0/0 10.1.2.2/30",
+  "ip DEPOT2 S0/0/1 10.1.3.2/30",
+  "ip HQ G0/0/0 192.168.1.1/24",
+  "ip DEPOT1 G0/0 192.168.2.1/24",
+  "ip DEPOT2 G0/0 192.168.3.1/24",
+  "up HQ S0/1/0",
+  "up HQ S0/1/1",
+  "up DEPOT1 S0/0/1",
+  "clock HQ S0/1/0 128000",
+  "clock HQ S0/1/1 128000",
+  "clock DEPOT1 S0/0/1 64000",
+  "desc HQ S0/1/0 ~depot1",
+  "desc HQ S0/1/1 ~depot2",
+  "desc DEPOT1 S0/0/1 ~backup",
+  "ospf HQ 1 10.1.1.0/30 0",
+  "ospf HQ 1 10.1.2.0/30 0",
+  "ospf DEPOT1 1 10.1.3.0/30 0",
+  "ospf DEPOT2 1 10.1.3.0/30 0",
+  "rid HQ 1 1.1.1.1",
+  "ping HQ-PC D1-PC",
+  "ping HQ-PC D2-PC",
+  "ping D1-PC D2-PC",
+]
+
+debrief = """
+Packet Tracer marks the DCE end of a serial cable with a small clock symbol, and `show controllers serial`
+says DCE or DTE. Real serial lines get their clock from the provider's equipment; in a lab the DCE end of the
+back-to-back cable plays that role.
+
+The triangle is what makes this WAN resilient: with three /30 links, each site has two ways out, and OSPF
+recomputes the path when a line fails.
+"""
+questions = [
+  "Why does `clock rate` on a DTE interface change nothing?",
+  "With the DEPOT1-DEPOT2 line down, what path does a ping from D1-PC to D2-PC take, and what does it cost?",
+]

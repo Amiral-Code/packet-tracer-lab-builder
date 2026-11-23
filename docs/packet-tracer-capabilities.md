@@ -68,8 +68,9 @@ plus about 80 IoT things, PLC/HMI and OT gear. Adding a model is one entry in `l
 the builder treats it as IOS (configurable), host, or neither.
 
 Modules: routers take HWIC-2T/WIC-2T/NIM-2T serial cards, HWIC-4ESW/NIM-ES2-4 switch modules, HWIC-1GE-SFP and
-SFP/GLC optics, HWIC-AP wireless, analog voice (HWIC-8A, NM-8AM). The builder cannot add modules yet, so serial
-WAN links need a template that already has a serial card.
+SFP/GLC optics, HWIC-AP wireless, analog voice (HWIC-8A, NM-8AM). The builder does not insert modules itself:
+serial WAN labs use `-serial` library models, routers taken whole (with their card) from the user's own files
+(1941/2911 + HWIC-2T, 1841 + WIC-2T, ISR4321/ISR4331 + NIM-2T).
 
 ### IOS features (from the CLI references)
 

@@ -26,6 +26,51 @@ WANT = {  # (TYPE, model) -> library key
     ("WirelessRouter", "Linksys-WRT300N"): "wrt300n", ("TabletPC", "TabletPC-PT"): "tablet",
     ("Pda", "SMARTPHONE-PT"): "smartphone",
 }
+# Routers with interface cards already fitted, taken whole from the user's own files: Packet Tracer stores a card as
+# a MODULE in the router's slot tree with its own ports, so copying a real fitted router keeps that tree exactly.
+# (TYPE, model, sorted card models) -> library key. Plain WANT keys only take routers with no card fitted.
+VARIANTS = {
+    ("Router", "1941", ("HWIC-2T",)): "router-1941-serial",
+    ("Router", "2911", ("HWIC-2T",)): "router-2911-serial",
+    ("Router", "1841", ("WIC-2T",)): "router-1841-serial",
+    ("Router", "ISR4321", ("NIM-2T",)): "router-isr4321-serial",
+    ("Router", "ISR4331", ("NIM-2T",)): "router-isr4331-serial",
+}
+EMPTY_CARDS = ("WIC-Cover", "NIM-Cover")
+
+
+def interface_cards(device):
+    """Sorted models of the removable interface cards fitted in a device (blank covers excluded)."""
+    return tuple(sorted(m.findtext("MODEL") for m in device.iter("MODULE")
+                        if m.findtext("TYPE") == "eInterfaceCard" and m.findtext("MODEL") not in EMPTY_CARDS))
+
+
+# Generic "-PT" devices take any network modules; their plain template must keep Packet Tracer's stock fit
+STOCK_PT_MODULES = {
+    "Router-PT": ("PT-ROUTER-NM-1CFE", "PT-ROUTER-NM-1CFE", "PT-ROUTER-NM-1FFE", "PT-ROUTER-NM-1FFE",
+                  "PT-ROUTER-NM-1S", "PT-ROUTER-NM-1S"),
+    "Cloud-PT": ("PT-CLOUD-NM-1AM", "PT-CLOUD-NM-1AM", "PT-CLOUD-NM-1CE", "PT-CLOUD-NM-1CX",
+                 "PT-CLOUD-NM-1S", "PT-CLOUD-NM-1S", "PT-CLOUD-NM-1S", "PT-CLOUD-NM-1S"),
+}
+
+
+def pt_modules(device):
+    return tuple(sorted(m.findtext("MODEL") for m in device.iter("MODULE")
+                        if (m.findtext("TYPE") or "").startswith("ePt") and m.findtext("MODEL")
+                        and not m.findtext("MODEL").endswith("-COVER")))
+
+
+def library_key(device):
+    t = device.find("ENGINE/TYPE")
+    if t is None:
+        return None
+    cards = interface_cards(device)
+    if cards:
+        return VARIANTS.get((t.text, t.get("model"), cards))
+    stock = STOCK_PT_MODULES.get(t.get("model"))
+    if stock is not None and pt_modules(device) != stock:
+        return None
+    return WANT.get((t.text, t.get("model")))
 
 
 def load(path):
@@ -196,10 +241,7 @@ def build(sources, destination=None):
             if _has_usable_physical_workspace(network) and (base is None or score > base[0]):
                 base = (score, copy.deepcopy(network), filename)
             for device in network.findall("NETWORK/DEVICES/DEVICE"):
-                device_type = device.find("ENGINE/TYPE")
-                if device_type is None:
-                    continue
-                key = WANT.get((device_type.text, device_type.get("model")))
+                key = library_key(device)
                 if key and (key not in found or score > found[key][0]):
                     found[key] = (score, copy.deepcopy(device), label, filename, version)
     if not found:

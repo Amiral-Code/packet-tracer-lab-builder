@@ -501,7 +501,24 @@ UDP_SERVICE_PORTS = {53: "DNS", 67: "DHCP", 68: "DHCP", 69: "TFTP", 123: "NTP", 
 CONNECTIVITY_STATEMENTS = ("ping", "ping6", "tcp", *TCP_PORTS, "udp")
 GRADE_STATEMENTS = ("ip", "ip6", "up", "gw", "gw6", "hostname", "line", "in", "dhcp", "vlan", "access", "trunk",
                     "route", "route6", "ospf", "rid", "passive", "stp", "portfast", "portsec", "desc", "banner",
-                    "nat", "acl", "hsrp", "pool", "secret", "user", *CONNECTIVITY_STATEMENTS, "cable")
+                    "nat", "acl", "hsrp", "pool", "secret", "user", "clock", *CONNECTIVITY_STATEMENTS, "cable")
+# the rates IOS (and Packet Tracer) accept for `clock rate` on a DCE serial interface
+CLOCK_RATES = (1200, 2400, 4800, 9600, 19200, 38400, 56000, 64000, 72000, 125000, 128000, 148000, 250000, 500000,
+               800000, 1000000, 1300000, 2000000, 4000000)
+
+
+def serial_dce(spec):
+    """{(device, long port): True if that end of a serial link is DCE, False if DTE}. A serial link's first end
+    (a) is DCE unless the link says cable = "eSerialDTE"."""
+    out = {}
+    for lk in spec.get("link", []):
+        (na, pa), (nb, pb) = lk["a"].split(None, 1), lk["b"].split(None, 1)
+        pa, pb = long_if(pa), long_if(pb)
+        if not (pa.startswith("Serial") or pb.startswith("Serial")):
+            continue
+        a_dce = lk.get("cable", "eSerialDCE") != "eSerialDTE"
+        out[(na, pa)], out[(nb, pb)] = a_dce, not a_dce
+    return out
 
 
 def _args(statement, n):
@@ -695,6 +712,7 @@ def default_hint(w, item):
              "route6": f"Check the IPv6 static routes on {dev}: show ipv6 route static.",
              "rid": f"Check the OSPF router ID on {dev}: show ip protocols (a new router-id needs clear ip ospf process).",
              "passive": f"Check which interfaces are passive on {dev}: show ip protocols.",
+             "clock": f"Check the clock rate on {dev}'s DCE serial interface: show controllers serial.",
              "hsrp": f"Check HSRP on {dev}: show standby brief.",
              "ospf": f"Check which networks OSPF advertises on {dev}, and in which area: show ip protocols.",
              "stp": f"Check the bridge priority on {dev}: show spanning-tree.",
@@ -740,6 +758,8 @@ def _statement(st, w, k, items, checks, spec):
         _line_item(items, checks, w[1], None, f"ipv6 route {net.compressed.upper()} {via}")
     elif k == "rid":                    # rid DEV PID A.B.C.D
         _line_item(items, checks, w[1], f"router ospf {int(w[2])}", f"router-id {ipaddress.ip_address(w[3])}")
+    elif k == "clock":                  # clock DEV SERIAL RATE (DCE end only)
+        _line_item(items, checks, w[1], f"interface {long_if(w[2])}", f"clock rate {int(w[3])}")
     elif k == "passive":                # passive DEV PID IFACE
         _line_item(items, checks, w[1], f"router ospf {int(w[2])}", f"passive-interface {long_if(w[3])}")
     elif k == "portfast":               # portfast SW IFACE

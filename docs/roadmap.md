@@ -88,8 +88,10 @@ Live-confirmed 2026-11-23 (`feature-probe-2.pka`, Check Results **40/40**, Conne
 - Add models from the user's own sources with a type class each (IOS, ASA, host, appliance, passive):
   ISR4321/1841 (done), ASA 5505/5506-X, 2950/2950T, Switch-PT, WLC-PT, sniffer, home router, DSL/cable modems,
   cell tower, Meraki. `configs_for` must only write IOS configuration to IOS devices.
-- Module insertion: HWIC-2T/WIC-2T/NIM-2T serial, NIM-ES2-4, SFP optics, written the way Packet Tracer stores
-  a module in its slot; then serial WAN labs with DCE clock rate checks.
+- ~~**Serial WAN**~~ `-serial` models (1941/2911 + HWIC-2T, 1841 + WIC-2T, ISR4321/ISR4331 + NIM-2T) taken
+  whole from the user's files, serial links with a named DCE end, `clock` statement, serial lint;
+  `examples/serial-wan-triangle.toml` proven by round trip. Pending live check: `serial-wan-triangle.pka`.
+- Module insertion into an empty slot (NIM-ES2-4, SFP optics, any card mix not found whole in a file).
 - ASA labs: interfaces, security levels, ACLs, NAT objects (assessment classes exist).
 - Wireless labs: WLC-based WLANs and range in the Physical view.
 

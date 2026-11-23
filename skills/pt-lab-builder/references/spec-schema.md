@@ -21,6 +21,14 @@ One TOML file describes one original Packet Tracer activity.
 
 Use model keys reported by `ptlab models`. Ports must exist on the chosen model; an invalid port can make Packet Tracer reject the entire activity. Short interface names such as `G0/0`, `Fa0/1`, and `S0/0/0` are accepted.
 
+Serial WAN: use a `-serial` model, a router taken whole from the user's own files with its serial card fitted
+(`router-1941-serial` and `router-2911-serial` with HWIC-2T: `S0/0/0`, `S0/0/1`; `router-1841-serial` with
+WIC-2T: `S0/0/0`, `S0/0/1`; `router-isr4321-serial` with NIM-2T: `S0/1/0`, `S0/1/1`; `router-isr4331-serial`
+with NIM-2T: `S0/2/0`, `S0/2/1`). A serial port can only be cabled to another serial port. The link's **first**
+end (`a`) is the DCE that supplies the clock; `cable = "eSerialDTE"` makes `b` the DCE instead. Packet Tracer
+stores the link with no cable type and names the DCE end (`DCEDEV`/`DCEPORT`). Other cable values:
+`eStraightThrough`, `eCrossOver`, `eFiber` (chosen automatically when omitted).
+
 Omit logical coordinates to use automatic site-by-site layout. Areas support cyan, yellow, green, pink, orange, purple, blue, grey, and red.
 
 Configuration snippets use running-config form. Indentation means a command belongs to the preceding section:
@@ -122,6 +130,7 @@ Grading statements (one string each; quote multi-word fields of `in` with double
 | `route6 DEV PREFIX/LEN NEXT-HOP` | IPv6 static route (`::/0` for a default) | `ipv6 route …` line |
 | `rid DEV PID A.B.C.D` | OSPF router ID | ` router-id …` under `router ospf PID` |
 | `passive DEV PID IFACE` | OSPF passive interface | ` passive-interface …` under `router ospf PID` |
+| `clock DEV SERIAL RATE` | clock rate on a DCE serial port (lint refuses the DTE end and rates IOS rejects) | ` clock rate …` under the interface |
 | `portfast SW IFACE` | PortFast on an access port | PortFast |
 | `portsec SW IFACE [max N] [sticky] [violation protect\|restrict\|shutdown]` | port security and its options | Port Security > Enabled, Max Secure Mac, Sticky Enabled, Violation |
 | `desc DEV IFACE TEXT` | interface description: exact `TEXT`, `~word` (contains, any case) or `any` (not blank) | Description |
