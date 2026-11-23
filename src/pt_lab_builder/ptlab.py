@@ -346,6 +346,8 @@ PKA_KINDS = {
     "mask": (["Ports", "{port}"], "Subnet Mask", "Subnet Mask", "0", "Ip"),
     # "Port Up" = the interface is up/up (shutdown turns it off); "Power" only means the port has power
     "port_on": (["Ports", "{port}"], "Port Up", "Port Up", "4", "Physical"),
+    # a host set to DHCP (Desktop > IP Configuration > DHCP); path and value as graded in the user's activities
+    "dhcp_client": (["Ports", "{port}"], "DHCP client enable", "DHCP client enable", "0", "Ip"),
     "router_id": (["OSPF", "{process}"], "Router ID", "Router ID", "1", "Routing"),
     # a line that must be present in the running-config (Activity Wizard "Entire Config" slot +
     # the {{DeviceConfig.isInConfig:LINE}} variable)

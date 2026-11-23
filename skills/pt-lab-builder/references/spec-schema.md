@@ -126,7 +126,7 @@ Grading statements (one string each; quote multi-word fields of `in` with double
 | `gw HOST A.B.C.D` | host default gateway | Default Gateway |
 | `gw HOST A.B.C.D\|E.F.G.H` | host default gateway, any of these (e.g. real or HSRP virtual) | Default Gateway (`{{RegEx:…}}`) |
 | `gw6 HOST ADDR` | host IPv6 default gateway (link-local allowed) | Default Gateway IPv6 |
-| `dhcp HOST` | host uses DHCP | local check only |
+| `dhcp HOST` | host is set to DHCP | `Ports > PORT > DHCP client enable` |
 | `hostname DEV NAME` | device hostname | Host Name |
 | `line DEV TEXT` | an **unindented** running-config line, e.g. `ip route`, `ip nat inside source …`, `access-list …` | config line |
 | `in DEV "PARENT" "LINE"` | an indented line inside a section, e.g. `in R1 "interface GigabitEthernet0/1" "ip helper-address 10.0.0.9"` | config line |

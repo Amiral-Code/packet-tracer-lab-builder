@@ -714,6 +714,8 @@ def default_hint(w, item):
         if k == "cable":
             return f"Is {dev} {port} cabled to the right port, with the right cable type? Check its link light."
         return f"{dev} {port} is not up/up: is it enabled (no shutdown) and is its cable connected?"
+    if kind == "dhcp_client":
+        return f"Is {dev} set to get its address automatically? Desktop > IP Configuration > DHCP, then ipconfig."
     if kind == "gw":
         return f"Check {dev}'s default gateway (ipconfig): it must be its router's address on the same subnet."
     if kind == "hostname":
@@ -921,6 +923,8 @@ def _statement(st, w, k, items, checks, spec):
         dev, parent, line = _args(st, 4)[1:]
         _line_item(items, checks, dev, parent, line)
     elif k == "dhcp":                   # dhcp HOST
+        port = next((long_if(r[1]) for r in addressing_rows(spec) if r[0] == w[1] and len(r) > 1), "FastEthernet0")
+        items.append({"device": w[1], "kind": "dhcp_client", "port": port, "value": "1"})
         checks.append({"device": w[1], "desc": f"{w[1]} uses DHCP", "dhcp": True})
     elif k == "vlan":                   # vlan SW ID NAME
         dev, num, name = w[1], int(w[2]), w[3]
