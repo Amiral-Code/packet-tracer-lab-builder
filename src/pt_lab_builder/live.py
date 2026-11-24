@@ -22,7 +22,8 @@ from . import labgen, ptlab
 
 PRIVILEGES = ("GET_NETWORK_INFO", "CHANGE_NETWORK_INFO", "SIMULATION_MODE", "MISC_GUI", "FILE", "ACTIVITY_WIZARD",
               "IPC", "APPLICATION")
-CONNECT = {"eStraightThrough": 8100, "eCrossOver": 8101, "eFiber": 8103, "ePhoneLine": 8104, "eSerialDCE": 8106,
+CONNECT = {"eStraightThrough": 8100, "eCrossOver": 8101, "eFiber": 8103, "eSingleMode": 8103, "eMultiMode": 8103,
+           "ePhoneLine": 8104, "eSerialDCE": 8106,
            "eSerialDTE": 8106, "eCoaxial": 8110}
 
 SCRIPT = r"""

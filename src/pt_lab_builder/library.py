@@ -30,6 +30,8 @@ WANT = {  # (TYPE, model) -> library key
     ("CoAxialSplitter", "CoAxialSplitter-PT"): "coax-splitter",
     ("CentralOfficeServer", "Central-Office-Server"): "central-office", ("CellTower", "Cell-Tower"): "cell-tower",
     ("ASA", "5506-X"): "asa-5506x", ("ASA", "5505"): "asa-5505",
+    ("AccessPoint", "AccessPoint-PT-N"): "ap-n", ("AccessPoint", "AccessPoint-PT-AC"): "ap-ac",
+    ("LightWeightAccessPoint", "3702i"): "lap-3702i",
 }
 # Packet Tracer stores no port names: it derives them per model. Names for devices without an IOS
 # configuration, as they appear on links in real files (the user's activities and Packet Tracer's samples).
@@ -44,6 +46,9 @@ PORT_NAMES = {
     "Central-Office-Server": ["Backbone", "Coaxial0/0", "Coaxial0/1", "Coaxial0/2", "Coaxial0/3", "Coaxial0/4",
                               "Coaxial0/5"],
     "Cell-Tower": ["Coaxial0"],
+    # access points: the Ethernet port is "Port 0" (links in the user's files; the library had FastEthernet0)
+    "AccessPoint-PT": ["Port 0"], "AccessPoint-PT-N": ["Port 0"], "AccessPoint-PT-AC": ["Port 0"],
+    "3702i": ["GigabitEthernet0"], "LAP-PT": ["GigabitEthernet0"],
     "5506-X": [f"GigabitEthernet1/{i}" for i in range(1, 9)] + ["Management1/1"],
     "5505": [f"Ethernet0/{i}" for i in range(8)],
 }
@@ -58,7 +63,18 @@ VARIANTS = {
     ("Router", "ISR4321", ("NIM-2T",)): "router-isr4321-serial",
     ("Router", "ISR4331", ("NIM-2T",)): "router-isr4331-serial",
 }
+# Devices whose optics (SFP modules in their uplink slots) make fiber ports usable, also taken whole:
+# (TYPE, model, sorted card models, sorted SFP models) -> library key. Checked before VARIANTS.
+SFP_VARIANTS = {
+    ("Router", "2911", ("HWIC-1GE-SFP",), ("GLC-LH-SMD",)): "router-2911-sfp",          # fiber G0/0/0
+    ("MultiLayerSwitch", "3650-24PS", (), ("GLC-LH-SMD",) * 3): "l3switch-3650-fiber",  # fiber G1/1/1-3
+}
 EMPTY_CARDS = ("WIC-Cover", "NIM-Cover")
+
+
+def sfp_modules(device):
+    return tuple(sorted(m.findtext("MODEL") for m in device.iter("MODULE")
+                        if m.findtext("TYPE") == "eSfpModule" and m.findtext("MODEL")))
 
 
 def interface_cards(device):
@@ -101,6 +117,9 @@ def library_key(device):
     if t is None:
         return None
     cards = interface_cards(device)
+    sfp = SFP_VARIANTS.get((t.text, t.get("model"), cards, sfp_modules(device)))
+    if sfp:
+        return sfp
     if cards:
         return VARIANTS.get((t.text, t.get("model"), cards))
     stock = STOCK_PT_MODULES.get(t.get("model"))

@@ -347,3 +347,16 @@ What the live check found that no file-level check could:
 - **Merge bug found on the way:** a setting that exists once (`spanning-tree mode`, `vtp mode`, ...) was added beside
   the factory value instead of replacing it; it now replaces it.
 
+## Iteration 3: fiber optics and access points (2026-11-24)
+
+- In the user's files: 2911 + HWIC-1GE-SFP + GLC-LH-SMD (fiber `GigabitEthernet0/0/0`), 3650 with GLC-LH-SMD in
+  `G1/1/1`-`G1/1/3` (`eSfpModule` MODULEs in the uplink slots), ISR4331 + NIM-ES2-4 (switch ports `G0/1/0`-
+  `G0/1/3`; only in two T-Labs outside the library sources), LAP 3702i (`GigabitEthernet0`), AccessPoint-PT and
+  AccessPoint-PT-N linked on `Port 0`. The library had named the AccessPoint-PT port `FastEthernet0`, which no link
+  could use. AccessPoint-PT-AC's port name is inferred from its siblings (no link to one in any file).
+- A fiber link saved by an older Packet Tracer has no cable `TYPE`. Packet Tracer 9 writes `TYPE` `eSingleMode` or
+  `eMultiMode` and `OVERWITE_MISMATCH_FIBER` false (a link created through the API between GLC-LH-SMD optics
+  became `eSingleMode`). Loading an untyped fiber link, Packet Tracer 9 makes it `eMultiMode`, and with the
+  single-mode optics both ports stay down: `verify --values` showed Port Up 0 in the answer network. Written as
+  single-mode, the answer network's ports come up (14/14 values) and the live check passes (0 -> 14/14, 1/1).
+

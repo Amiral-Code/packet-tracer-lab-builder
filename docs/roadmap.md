@@ -99,6 +99,10 @@ Live-confirmed 2026-11-23 (`feature-probe-2.pka`, Check Results **40/40**, Conne
 - ~~**Live checks without a person**~~ `ptlab live-prepare` / `live-report` and the `pt-live-check.sh` harness:
   Packet Tracer solves each lab (console typing, cables, hosts, fault repair) and grades it. All nine examples
   pass unattended; it found and fixed a broken EtherChannel design in Northstar that every file-level check passed.
+- ~~**Fiber optics and access points**~~ `router-2911-sfp`, `l3switch-3650-fiber` (GLC-LH-SMD), single-mode fiber
+  links in Packet Tracer 9's format, `ap-n`, `ap-ac`, `lap-3702i`, access-point port names fixed (`Port 0`);
+  `examples/fiber-campus-uplink.toml` proven by round trip and live check. The ISR4331 with NIM-ES2-4 exists only
+  in two labs outside the library sources (T-Labs) and is left out.
 - Module insertion into an empty slot (NIM-ES2-4, SFP optics, any card mix not found whole in a file).
 - ~~**ASA labs**~~ `asa-5506x`/`asa-5505`, ASA CLI configs, native items (`nameif`, `seclevel`, `object`, `acl`,
   `ip`, `up`), automatic answer convergence, `inspect http` lint; `examples/asa-edge-firewall.toml` proven by round

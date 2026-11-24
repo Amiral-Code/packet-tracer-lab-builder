@@ -62,7 +62,8 @@ def _base_rack_reserved():
     return []
 
 
-CABLES = ("eStraightThrough", "eCrossOver", "eFiber", "eSerialDCE", "eSerialDTE", "eCoaxial", "ePhoneLine")
+CABLES = ("eStraightThrough", "eCrossOver", "eFiber", "eSingleMode", "eMultiMode", "eSerialDCE", "eSerialDTE",
+          "eCoaxial", "ePhoneLine")
 
 
 def _port_ok(ports, iface):
@@ -197,9 +198,10 @@ def lint(spec) -> Issues:
         if media[0] != media[1] and "serial" not in media:
             issues.error(f"link {i}: {ends[0][0]} {ends[0][1]} is a {media[0]} port but {ends[1][0]} {ends[1][1]} "
                          f"is a {media[1]} port")
-        elif media[0] in ("coax", "phone") and cable not in (None, {"coax": "eCoaxial", "phone": "ePhoneLine"}[media[0]]):
+        elif media[0] in ("coax", "phone", "fiber") and cable not in \
+                (None, *{"coax": ("eCoaxial",), "phone": ("ePhoneLine",), "fiber": ("eFiber", "eSingleMode", "eMultiMode")}[media[0]]):
             issues.error(f"link {i}: a {media[0]} link takes cable = "
-                         f"\"{ {'coax': 'eCoaxial', 'phone': 'ePhoneLine'}[media[0]] }\" (or none)")
+                         f"\"{ {'coax': 'eCoaxial', 'phone': 'ePhoneLine', 'fiber': 'eFiber'}[media[0]] }\" (or none)")
         serial = [m == "serial" for m in media]
         if any(serial) and not all(serial):
             issues.error(f"link {i}: a serial port can only be cabled to another serial port")

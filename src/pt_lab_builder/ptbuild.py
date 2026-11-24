@@ -199,9 +199,12 @@ def link(root, dev_a, port_a, dev_b, port_b, cable="eStraightThrough", kind="eCo
         dce_dev, dce_port = (dev_a, port_a) if cable == "eSerialDCE" else (dev_b, port_b)
         ET.SubElement(c, "DCEDEV").text = dce_dev.findtext("ENGINE/SAVE_REF_ID")
         ET.SubElement(c, "DCEPORT").text = dce_port
-    elif kind in ("eCoaxial", "ePhoneLine"):     # stored like serial: the link TYPE only, no cable TYPE
+    elif kind in ("eCoaxial", "ePhoneLine", "eFiber"):   # stored like serial: the link TYPE only, no cable TYPE
         if c.find("TYPE") is not None:
             c.remove(c.find("TYPE"))
+        if kind == "eFiber":    # Packet Tracer 9: the fiber type, which must suit the optics at both ends
+            ET.SubElement(c, "TYPE").text = cable if cable in ("eSingleMode", "eMultiMode") else "eMultiMode"
+            ET.SubElement(c, "OVERWITE_MISMATCH_FIBER").text = "false"
     elif c.find("TYPE") is not None:
         c.find("TYPE").text = cable
     root.find("NETWORK/LINKS").append(lk)
@@ -388,8 +391,8 @@ class Topology:
                 raise ValueError(f"{dev} has no port {port}; it has: {', '.join(self.ports(dev))}")
         if self._link_tpl is None:
             self._link_tpl = ET.fromstring(LINK_TEMPLATE)
-        kind = {"eSerialDCE": "eSerial", "eSerialDTE": "eSerial", "eFiber": "eFiber", "eCoaxial": "eCoaxial",
-                "ePhoneLine": "ePhoneLine"}.get(cable, "eCopper")
+        kind = {"eSerialDCE": "eSerial", "eSerialDTE": "eSerial", "eFiber": "eFiber", "eSingleMode": "eFiber",
+                "eMultiMode": "eFiber", "eCoaxial": "eCoaxial", "ePhoneLine": "ePhoneLine"}.get(cable, "eCopper")
         return link(self.root, self.devices[a] if isinstance(a, str) else a, port_a,
                     self.devices[b] if isinstance(b, str) else b, port_b, cable=cable, kind=kind, like=self._link_tpl)
 

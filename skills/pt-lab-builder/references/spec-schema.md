@@ -38,6 +38,13 @@ maps its provider ports with `connect = [["Coaxial7", "Ethernet6"]]` (cable) or 
 (DSL). Coax and phone links are chosen automatically. Port names containing a space are written as Packet
 Tracer shows them, quoted in grade statements: `cable MODEM "Port 0" ISP-CLOUD Coaxial7`.
 
+Fiber and access points: `router-2911-sfp` (HWIC-1GE-SFP card with a GLC-LH-SMD optic: fiber `G0/0/0`) and
+`l3switch-3650-fiber` (GLC-LH-SMD optics: fiber `G1/1/1`-`G1/1/3`) are taken whole from the user's files. Fiber
+links are chosen automatically and written as Packet Tracer 9 stores them, with the fiber type: single-mode between
+these optics (a link read as multimode stays down on them); `cable = "eSingleMode"` / `"eMultiMode"` override it.
+Access points `ap` (AccessPoint-PT), `ap-n`, `ap-ac` (Ethernet `Port 0`) and lightweight `lap`, `lap-3702i`
+(`GigabitEthernet0`) take a straight-through cable to a switch.
+
 ASA firewalls: `asa-5506x` (`G1/1`-`G1/8`, `Management1/1`) and `asa-5505` (`E0/0`-`E0/7`). Their `[config]` is ASA
 CLI (`nameif`, `security-level`, `route outside ...`, `object network`, `access-group ... interface ...`); every
 port starts shut down, so used ports need `no shutdown`. Packet Tracer's tree for an ASA has **no running-config

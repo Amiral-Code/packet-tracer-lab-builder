@@ -1,0 +1,162 @@
+[lab]
+id = "fiber-campus-uplink"
+title = "Light the Uplink: A Fiber Link Between Core and Edge"
+level = 2
+kind = "configure"
+exam = "CCNA 1.3 / 1.6 - fiber and copper media, SFP modules, routed ports, inter-VLAN routing"
+time = 30
+scenario = """
+The campus core switch and the edge router sit in buildings 400 m apart, too far for copper. Both already carry
+long-reach optics (GLC-LH-SMD SFPs), but nobody has patched the fiber or configured the link.
+
+Patch the fiber, turn the core's uplink into a routed port, and route the staff VLAN out to the data centre.
+"""
+objectives = [
+  "Choose fiber for an uplink between SFP ports and copper for everything else",
+  "Configure a routed port and an SVI on a multilayer switch",
+  "Configure static and default routes between a multilayer switch and a router",
+  "Verify end-to-end reachability across the fiber link",
+]
+
+[[device]]
+name = "CORE"
+model = "l3switch-3650-fiber"
+x = 420
+y = 140
+[[device]]
+name = "EDGE"
+model = "router-2911-sfp"
+x = 720
+y = 140
+[[device]]
+name = "DC-SRV"
+model = "server"
+x = 880
+y = 300
+[[device]]
+name = "STAFF-PC"
+model = "pc"
+x = 300
+y = 320
+[[device]]
+name = "AP1"
+model = "ap-n"
+x = 540
+y = 320
+
+[[link]]
+a = "CORE G1/1/1"
+b = "EDGE G0/0/0"
+student = true
+[[link]]
+a = "CORE G1/0/1"
+b = "STAFF-PC Fa0"
+[[link]]
+a = "CORE G1/0/2"
+b = "AP1 Port 0"
+[[link]]
+a = "EDGE G0/1"
+b = "DC-SRV Fa0"
+
+[[area]]
+label = "CAMPUS  -  staff VLAN 10: 192.168.10.0/24"
+color = "green"
+devices = ["CORE", "STAFF-PC", "AP1"]
+[[area]]
+label = "DATA CENTRE  -  203.0.113.0/24"
+color = "orange"
+devices = ["EDGE", "DC-SRV"]
+
+[addressing]
+rows = [
+  ["CORE",     "G1/1/1", "10.0.0.2/30",       ""],
+  ["CORE",     "Vlan10", "192.168.10.1/24",   ""],
+  ["EDGE",     "G0/0/0", "10.0.0.1/30",       ""],
+  ["EDGE",     "G0/1",   "203.0.113.1/24",    ""],
+  ["STAFF-PC", "Fa0",    "192.168.10.10/24",  "192.168.10.1"],
+  ["DC-SRV",   "Fa0",    "203.0.113.10/24",   "203.0.113.1"],
+]
+
+[config.start]
+EDGE = """
+interface G0/1
+ ip address 203.0.113.1 255.255.255.0
+ no shutdown
+"""
+
+[config.answer]
+CORE = """
+ip routing
+vlan 10
+ name STAFF
+interface G1/0/1
+ switchport mode access
+ switchport access vlan 10
+interface G1/0/2
+ switchport mode access
+ switchport access vlan 10
+interface Vlan10
+ ip address 192.168.10.1 255.255.255.0
+ no shutdown
+interface G1/1/1
+ description FIBER_UPLINK_TO_EDGE
+ no switchport
+ ip address 10.0.0.2 255.255.255.252
+ no shutdown
+ip route 0.0.0.0 0.0.0.0 10.0.0.1
+"""
+EDGE = """
+interface G0/0/0
+ description FIBER_UPLINK_TO_CORE
+ ip address 10.0.0.1 255.255.255.252
+ no shutdown
+interface G0/1
+ ip address 203.0.113.1 255.255.255.0
+ no shutdown
+ip route 192.168.10.0 255.255.255.0 10.0.0.2
+"""
+
+[[part]]
+title = "Patch the fiber"
+intro = "The uplink ports hold SFP optics: they only take fiber. Everything else in this lab is copper."
+steps = [
+  "Connect **CORE G1/1/1** to **EDGE G0/0/0** with a **fiber** cable.",
+  "Check the module bays in each device's Physical tab: the GLC-LH-SMD optic is what makes these ports fiber ports.",
+]
+hint = "If Packet Tracer refuses the cable, it is the wrong medium for an SFP port."
+why = "Copper Ethernet reaches 100 m; single-mode fiber with long-reach optics reaches kilometres."
+
+[[part]]
+title = "Route across it"
+intro = "The core switch routes for the staff VLAN; the fiber link is a point-to-point routed link."
+steps = [
+  "On **CORE**: enable IP routing, create VLAN 10 named STAFF, put G1/0/1 and G1/0/2 in it, and give **Vlan10** 192.168.10.1/24.",
+  "Make **G1/1/1** a routed port (`no switchport`) with 10.0.0.2/30, and add a default route via 10.0.0.1.",
+  "On **EDGE**: address **G0/0/0** 10.0.0.1/30 and add a static route to 192.168.10.0/24 via 10.0.0.2.",
+  "Check: `show interfaces status` on CORE shows G1/1/1 as routed; STAFF-PC pings 203.0.113.10.",
+]
+hint = "A routed port on a multilayer switch needs `no switchport` before it accepts an IP address."
+why = "A routed uplink keeps the campus VLANs and their broadcasts on the campus side of the fiber."
+
+[grade]
+items = [
+  "cable CORE G1/1/1 EDGE G0/0/0",
+  "ip CORE G1/1/1 10.0.0.2/30",
+  "ip CORE Vlan10 192.168.10.1/24",
+  "ip EDGE G0/0/0 10.0.0.1/30",
+  "access CORE G1/0/1 10",
+  "access CORE G1/0/2 10",
+  "route CORE 0.0.0.0/0 10.0.0.1",
+  "route EDGE 192.168.10.0/24 10.0.0.2",
+  "ping STAFF-PC DC-SRV",
+]
+
+debrief = """
+The port decides the medium. An SFP slot is empty until an optic is fitted; the optic (here a GLC-LH-SMD,
+1000BASE-LX/LH) decides whether it takes fiber and how far it reaches. Packet Tracer only accepts a fiber cable
+between two fiber ports.
+"""
+questions = [
+  "Why does the uplink use a routed port instead of a trunk?",
+  "What would change if the optics were GLC-T modules instead?",
+]

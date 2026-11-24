@@ -114,6 +114,24 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(labgen.cable_for("pc", "home-router", "FastEthernet0", "GigabitEthernet 1"), "eStraightThrough")
         self.assertEqual(labgen.cable_for("pc", "router-2911", "FastEthernet0", "GigabitEthernet0/0"), "eCrossOver")
 
+    def test_fiber_and_access_point_cabling(self):
+        self.assertEqual(labgen.cable_for("l3switch-3650-fiber", "router-2911-sfp", "GigabitEthernet1/1/1",
+                                          "GigabitEthernet0/0/0"), "eSingleMode")   # GLC-LH-SMD optics both ends
+        self.assertEqual(labgen.port_medium("l3switch-3650-fiber", "GigabitEthernet1/0/1"), "copper")
+        self.assertEqual(labgen.cable_for("l3switch-3650", "ap-n", "GigabitEthernet1/0/2", "Port 0"),
+                         "eStraightThrough")
+        self.assertEqual(labgen.cable_for("switch-2960", "lap", "FastEthernet0/1", "GigabitEthernet0"),
+                         "eStraightThrough")
+
+    def test_fiber_link_carries_its_fiber_type(self):
+        from pt_lab_builder import ptbuild
+        root = ET.fromstring("<PACKETTRACER5><NETWORK><DEVICES/><LINKS/></NETWORK></PACKETTRACER5>")
+        devs = [ET.fromstring(f"<DEVICE><ENGINE><SAVE_REF_ID>save-ref-id:{i}</SAVE_REF_ID></ENGINE></DEVICE>") for i in (1, 2)]
+        lk = ptbuild.link(root, devs[0], "GigabitEthernet1/1/1", devs[1], "GigabitEthernet0/0/0", cable="eSingleMode",
+                          kind="eFiber", like=ET.fromstring(ptbuild.LINK_TEMPLATE))
+        self.assertEqual((lk.findtext("TYPE"), lk.findtext("CABLE/TYPE"), lk.findtext("CABLE/OVERWITE_MISMATCH_FIBER")),
+                         ("eFiber", "eSingleMode", "false"))
+
     def test_cloud_connections_are_written_like_packet_tracer(self):
         from pt_lab_builder import ptbuild
         cloud = ET.fromstring("<DEVICE><ENGINE><MODEM_CONNECTIONS><CONNECTION/></MODEM_CONNECTIONS></ENGINE></DEVICE>")

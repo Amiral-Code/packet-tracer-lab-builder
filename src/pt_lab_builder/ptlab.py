@@ -209,6 +209,8 @@ def cables(tree):
                 out[ends] = ("eSerial", names.get(c.findtext("DCEDEV")), c.findtext("DCEPORT"))
             elif lk.findtext("TYPE") in ("eCoaxial", "ePhoneLine"):
                 out[ends] = lk.findtext("TYPE")
+            elif lk.findtext("TYPE") == "eFiber":          # single- or multimode (Packet Tracer 9), or untyped
+                out[ends] = c.findtext("TYPE") or "eFiber"
             else:
                 out[ends] = c.findall("TYPE")[-1].text if c.findall("TYPE") else None
     return out

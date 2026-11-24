@@ -367,8 +367,17 @@ IOS_TYPES = ("Router", "Switch", "MultiLayerSwitch", "ASA")   # devices configur
 HOME_MODELS = ("home-router", "wrt300n", "cable-modem", "dsl-modem", "cloud", "central-office")
 
 
+# fiber ports of library variants whose SFP optics are fitted. GLC-LH-SMD (1000BASE-LX/LH) is single-mode:
+# Packet Tracer 9 matches the cable's fiber type to the optics, and a link it reads as multimode stays down.
+FIBER_PORTS = {"router-2911-sfp": ("GigabitEthernet0/0/0",),
+               "l3switch-3650-fiber": ("GigabitEthernet1/1/1", "GigabitEthernet1/1/2", "GigabitEthernet1/1/3")}
+SINGLE_MODE = ("router-2911-sfp", "l3switch-3650-fiber")
+
+
 def port_medium(model, port):
-    """'serial', 'coax', 'phone' or 'copper' for one port of a library model."""
+    """'serial', 'coax', 'phone', 'fiber' or 'copper' for one port of a library model."""
+    if port in FIBER_PORTS.get(model, ()):
+        return "fiber"
     if port.startswith("Serial"):
         return "serial"
     if port.startswith("Coaxial") or (model == "cable-modem" and port == "Port 0"):
@@ -391,9 +400,11 @@ def cable_for(ma, mb, pa, pb):
         return "eCoaxial"
     if "phone" in media:
         return "ePhoneLine"
+    if "fiber" in media:
+        return "eSingleMode" if ma in SINGLE_MODE and mb in SINGLE_MODE else "eMultiMode"
     if ma in HOME_MODELS or mb in HOME_MODELS:
         return "eStraightThrough"
-    host = ("pc", "server", "laptop", "printer", "ipphone-7960", "ap")
+    host = ("pc", "server", "laptop", "printer", "ipphone-7960", "ap", "ap-n", "ap-ac", "lap", "lap-3702i")
     cls = lambda m: "host" if m in host else "router" if m.startswith(("router", "asa")) else "switch"
     a, b = cls(ma), cls(mb)
     same = a == b or {a, b} == {"host", "router"}
