@@ -255,3 +255,31 @@ On ISR routers `show controllers serial` needs the port number (`show controller
 - With HOME-PC on DHCP the ping test passed (live-confirmed). The saved file keeps `PORT_DHCP_ENABLE` true and the
   gateway learned by DHCP, but not the leased address (its `IP` stays empty).
 
+## Iteration 3: ASA 5506-X (2026-11-24)
+
+- Neither of the user's ASA activities configures the firewall; Packet Tracer's own ASA 5505 samples keep their
+  configuration as running-config lines.
+- The 5506-X template came from a physical-mode activity where it had been saved **powered off** (`ENGINE/POWER`
+  false; `router-isr4331-serial` too) and inside a logical cluster (`DEVCLUSTERID` 2-{...}), which hid it from the
+  student. Every cloned device is now powered on and placed in the root view (`1-1`). A powered-off ASA keeps no
+  running-config and drops it on save, which first looked like "Packet Tracer saves no ASA running-config".
+- Powered on, Packet Tracer re-parses the ASA's running-config text on load and prints it back with every port
+  (`no nameif` / `no security-level` / `no ip address` / `shutdown` when unused). Ports are shut by default, so the
+  text must keep `no shutdown` (Packet Tracer does not print it).
+- The ASA's assessment tree has no `IOS Configuration > Running Configuration > LINES`; it has native nodes:
+  `Ports > IF > NameIf` / `Security Level` (eclass 8) / `Access-group In` (eclass 2) / IP Address / Subnet Mask /
+  Port Up, `Asa Object List > NAME > Address` (` subnet A M`) / `Nat` (` nat (inside,outside) dynamic interface`),
+  `Access-Group List > N`, `ACL > NAME` (one string per ACL), `Routes > Static RoutesV2 > RouteN`
+  (`0.0.0.0-0-GigabitEthernet1/1-0-1`, no next hop), `Policy Maps`, `Service Policy List`.
+- Items are pruned at load, before the ASA applies its configuration: 5/12 kept without answer convergence,
+  12/12 with `FORWARD_ANS_SIM_MS` 60000.
+- Live (probe, then `examples/asa-edge-firewall.toml`'s configuration): all ASA items red before and green after
+  configuring, without `write memory`; ping passed; HTTP (browser and the http test) failed through ASA PAT even
+  with the outside ACL removed, `show xlate` listing the flows as `TCP-other`; with `class-map
+  inspection_default` / `policy-map global_policy` / `inspect http` / `service-policy global_policy global` the page
+  loaded and Check Results showed 14/14 and 2/2. Packet Tracer's ASA therefore needs inspection for HTTP replies,
+  unlike a real ASA. `enable` prompts for a password even when none is set (press Enter); `show conn` is not
+  implemented.
+- `examples/asa-edge-firewall.toml`: 12/12 items and 2/2 tests kept, 12/12 values identical to Packet Tracer's own,
+  9/9 local checks on its answer network.
+

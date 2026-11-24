@@ -1,0 +1,174 @@
+[lab]
+id = "asa-edge-firewall"
+title = "Edge Firewall: Bringing an ASA Online"
+level = 2
+kind = "configure"
+exam = "CCNA 5.x / 4.1 - firewall interfaces and security levels, PAT, ACLs, stateful inspection"
+time = 35
+scenario = """
+Atlas Logistics is replacing its edge router with a Cisco ASA 5506-X firewall. The provider link and the office
+switch are already cabled to it, but the firewall is in its factory state: every port is shut down and unnamed.
+
+Bring the firewall online: name and trust its interfaces, give it a way out, translate the office behind its
+outside address, and decide what the outside may send in.
+"""
+objectives = [
+  "Configure ASA interfaces with a name (nameif), a security level and an address",
+  "Configure a default route on an ASA",
+  "Configure dynamic PAT with a network object",
+  "Permit returning traffic with an ACL and with stateful inspection",
+]
+
+[[device]]
+name = "FW"
+model = "asa-5506x"
+[[device]]
+name = "SW1"
+model = "switch-2960"
+[[device]]
+name = "PC1"
+model = "pc"
+[[device]]
+name = "ISP"
+model = "router-2911"
+[[device]]
+name = "WEB"
+model = "server"
+
+[[link]]
+a = "FW G1/2"
+b = "SW1 G0/1"
+[[link]]
+a = "SW1 Fa0/1"
+b = "PC1 Fa0"
+[[link]]
+a = "FW G1/1"
+b = "ISP G0/0"
+[[link]]
+a = "ISP G0/1"
+b = "WEB Fa0"
+
+[[area]]
+label = "OFFICE (inside)  -  192.168.1.0/24"
+color = "green"
+devices = ["SW1", "PC1"]
+[[area]]
+label = "PROVIDER (outside)  -  203.0.113.0/30, 198.51.100.0/24"
+color = "orange"
+devices = ["ISP", "WEB"]
+
+[addressing]
+rows = [
+  ["FW",  "G1/1", "203.0.113.2/30",   ""],
+  ["FW",  "G1/2", "192.168.1.1/24",   ""],
+  ["ISP", "G0/0", "203.0.113.1/30",   ""],
+  ["ISP", "G0/1", "198.51.100.1/24",  ""],
+  ["PC1", "Fa0",  "192.168.1.10/24",  "192.168.1.1"],
+  ["WEB", "Fa0",  "198.51.100.10/24", "198.51.100.1"],
+]
+
+[config.start]
+ISP = """
+interface G0/0
+ ip address 203.0.113.1 255.255.255.252
+ no shutdown
+interface G0/1
+ ip address 198.51.100.1 255.255.255.0
+ no shutdown
+"""
+
+[config.answer]
+ISP = """
+interface G0/0
+ ip address 203.0.113.1 255.255.255.252
+ no shutdown
+interface G0/1
+ ip address 198.51.100.1 255.255.255.0
+ no shutdown
+"""
+FW = """
+interface G1/1
+ nameif outside
+ security-level 0
+ ip address 203.0.113.2 255.255.255.252
+ no shutdown
+interface G1/2
+ nameif inside
+ security-level 100
+ ip address 192.168.1.1 255.255.255.0
+ no shutdown
+route outside 0.0.0.0 0.0.0.0 203.0.113.1 1
+object network INSIDE-NET
+ subnet 192.168.1.0 255.255.255.0
+ nat (inside,outside) dynamic interface
+access-list OUTSIDE-IN extended permit icmp any any
+access-group OUTSIDE-IN in interface outside
+class-map inspection_default
+ match default-inspection-traffic
+policy-map global_policy
+ class inspection_default
+  inspect http
+service-policy global_policy global
+"""
+
+[[part]]
+title = "Name and trust the interfaces"
+intro = "An ASA forwards nothing through an interface until it has a name. The security level says how far the firewall trusts that side: 100 inside, 0 outside."
+steps = [
+  "Enter privileged mode: `enable` asks for a password even when none is set; press Enter.",
+  "**G1/1** faces the provider: name it `outside`, security level `0`, address `203.0.113.2/30`, and enable it.",
+  "**G1/2** faces the office: name it `inside`, security level `100`, address `192.168.1.1/24`, and enable it.",
+  "Check: `show nameif` and `show interface ip brief`.",
+]
+hint = "ASA ports are shut down out of the box: `no shutdown` is part of every interface you use."
+why = "Traffic from a higher to a lower security level is allowed by default; the reverse needs an explicit permit."
+
+[[part]]
+title = "Route and translate"
+intro = "The office uses private addresses; the provider only knows the firewall's outside address."
+steps = [
+  "Add a default route out of the `outside` interface via **203.0.113.1**.",
+  "Create network object **INSIDE-NET** for 192.168.1.0/24 and translate it to the outside interface address (dynamic PAT).",
+  "Check: from PC1 `ping 198.51.100.10`, then on FW `show xlate`.",
+]
+hint = "On an ASA the route names the interface first: `route outside 0.0.0.0 0.0.0.0 NEXT-HOP`."
+why = "With PAT every office host shares the one public address; the firewall tells the flows apart by port."
+
+[[part]]
+title = "Let the replies back in"
+intro = "Outside is the least trusted side: replies to the office's requests must be allowed back explicitly or tracked by inspection."
+steps = [
+  "Create ACL **OUTSIDE-IN** that permits ICMP from anywhere, and apply it inbound on `outside`.",
+  "Add the global inspection policy: class `inspection_default` matching default inspection traffic, policy `global_policy` that inspects **http**, applied globally.",
+  "Check: PC1 pings 198.51.100.10 and opens http://198.51.100.10 in its web browser.",
+]
+hint = "If the ping works but the web page never loads, the firewall is not tracking the HTTP replies: check the service policy."
+why = "Stateful inspection lets a reply in only when it belongs to a conversation started from inside, which is safer than permitting a whole protocol from anywhere."
+
+[grade]
+items = [
+  "nameif FW G1/1 outside",
+  "seclevel FW G1/1 0",
+  "ip FW G1/1 203.0.113.2/30",
+  "up FW G1/1",
+  "nameif FW G1/2 inside",
+  "seclevel FW G1/2 100",
+  "ip FW G1/2 192.168.1.1/24",
+  "object FW INSIDE-NET 192.168.1.0/24 nat (inside,outside) dynamic interface",
+  "acl FW G1/1 OUTSIDE-IN in",
+  "ping PC1 WEB",
+  "http PC1 WEB",
+]
+
+debrief = """
+An ASA thinks in interfaces with names and trust levels rather than in routing alone. Office traffic leaves
+freely because it goes from security level 100 to 0; replies are a different matter. Packet Tracer's ASA lets
+ICMP replies in only through an ACL, and HTTP replies only when the http protocol is inspected: the stateful
+behaviour a real ASA applies to every TCP connection.
+
+Route, PAT, ACL and inspection are proven by the two connectivity tests: a ping and a web request from PC1.
+"""
+questions = [
+  "Why could PC1 ping WEB before the inspection policy existed, but not load its web page?",
+  "What does `show xlate` show for PC1's web request, and which address does WEB see as the source?",
+]

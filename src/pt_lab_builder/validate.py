@@ -374,6 +374,14 @@ def lint(spec) -> Issues:
             if w[0] == "ip" and (w[1], iface) in table and len(w) == 4 and table[(w[1], iface)] != w[3]:
                 issues.warn(f"grade: {st!r} differs from the addressing table ({table[(w[1], iface)]})")
 
+    # Packet Tracer's ASA lets HTTP replies back in only when http is inspected (live 2026-11-24: the web page and the
+    # http test failed through ASA PAT until `inspect http` was in the global policy; a real ASA tracks all TCP)
+    if any(labgen.words(st)[0] == "http" for st in statements if st.split()):
+        for name, text in spec.get("config", {}).get("answer", {}).items():
+            if str(model.get(name, "")).startswith("asa-") and not re.search(r"^\s*inspect http\b", text, re.M):
+                issues.warn(f"{name}: an http test through this ASA needs `inspect http` in its service policy "
+                            f"(Packet Tracer's ASA drops HTTP replies otherwise)")
+
     # balance: configuration items say what was typed, outcome tests say whether it works; a lab needs both
     kinds = [labgen.words(st)[0] for st in statements if st.split()]
     outcome = [k for k in kinds if k in labgen.CONNECTIVITY_STATEMENTS]

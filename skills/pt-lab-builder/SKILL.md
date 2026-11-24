@@ -30,7 +30,8 @@ and `http`/`https`/`ssh`/`telnet` or `tcp ... PORT` for service policy. Use `fai
 (DNS, TFTP, ...) receives it, so never use it to grade a service.
 Serial WAN labs use the `-serial` models (`ptlab models`); the first end of a serial link is the DCE, and
 `clock DEV SERIAL RATE` grades its clock rate. Home and provider gear (`home-router`, `cable-modem`, `dsl-modem`, `cloud`
-with `connect`, ...) takes no IOS config: grade it with `cable` items, the provider router's settings and pings.
+with `connect`, ...) takes no IOS config: grade it with `cable` items, the provider router's settings and pings. ASA firewalls (`asa-5506x`) are graded
+with `nameif`, `seclevel`, `ip`, `acl`, `object` and pings; an `http` test through one needs `inspect http`.
 Do not invent UDP/DNS saved-PDU encodings; they are not supported yet.
 When the request calls for weighted or partial credit, map exact statements under `[grade.points]`; keep ordinary
 items at one point and give larger weights only to outcomes that genuinely deserve more influence.

@@ -95,7 +95,9 @@ Live-confirmed 2026-11-23 (`feature-probe-2.pka`, Check Results **40/40**, Conne
   Cloud with `connect` cable/DSL mapping, central office, cell tower; coax and phone links; IOS configuration only
   on IOS devices; `examples/home-cable-internet.toml` proven by round trip and live-confirmed (all items green, ping passes).
 - Module insertion into an empty slot (NIM-ES2-4, SFP optics, any card mix not found whole in a file).
-- ASA labs: interfaces, security levels, ACLs, NAT objects (assessment classes exist).
+- ~~**ASA labs**~~ `asa-5506x`/`asa-5505`, ASA CLI configs, native items (`nameif`, `seclevel`, `object`, `acl`,
+  `ip`, `up`), automatic answer convergence, `inspect http` lint; `examples/asa-edge-firewall.toml` proven by round
+  trip; the same lab live-confirmed as a probe (14/14, 2/2).
 - Wireless labs: WLC-based WLANs and range in the Physical view.
 
 ## Iteration 4: every student gets a different lab

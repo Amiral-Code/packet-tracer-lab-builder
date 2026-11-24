@@ -38,6 +38,15 @@ maps its provider ports with `connect = [["Coaxial7", "Ethernet6"]]` (cable) or 
 (DSL). Coax and phone links are chosen automatically. Port names containing a space are written as Packet
 Tracer shows them, quoted in grade statements: `cable MODEM "Port 0" ISP-CLOUD Coaxial7`.
 
+ASA firewalls: `asa-5506x` (`G1/1`-`G1/8`, `Management1/1`) and `asa-5505` (`E0/0`-`E0/7`). Their `[config]` is ASA
+CLI (`nameif`, `security-level`, `route outside ...`, `object network`, `access-group ... interface ...`); every
+port starts shut down, so used ports need `no shutdown`. Packet Tracer's tree for an ASA has **no running-config
+line items**: grade it with `nameif`, `seclevel`, `ip`, `up`, `acl` (Access-group In/Out) and `object`, and prove
+route, NAT and ACL with connectivity tests. Packet Tracer's ASA lets HTTP replies back in only when http is
+inspected, so an `http` test through an ASA needs `inspect http` in a `global_policy` service policy (lint warns).
+Labs with an ASA forward the answer network 60 s automatically (`answer_convergence_ms`); without it Packet Tracer
+drops the ASA's items, because the ASA applies its configuration only after the file has loaded.
+
 Omit logical coordinates to use automatic site-by-site layout. Areas support cyan, yellow, green, pink, orange, purple, blue, grey, and red.
 
 Configuration snippets use running-config form. Indentation means a command belongs to the preceding section:
@@ -139,6 +148,9 @@ Grading statements (one string each; quote multi-word fields of `in` with double
 | `route6 DEV PREFIX/LEN NEXT-HOP` | IPv6 static route (`::/0` for a default) | `ipv6 route …` line |
 | `rid DEV PID A.B.C.D` | OSPF router ID | ` router-id …` under `router ospf PID` |
 | `passive DEV PID IFACE` | OSPF passive interface | ` passive-interface …` under `router ospf PID` |
+| `nameif ASA IFACE NAME` | ASA interface name | `Ports > IFACE > NameIf` |
+| `seclevel ASA IFACE 0-100` | ASA security level | `Ports > IFACE > Security Level` |
+| `object ASA NAME NET/LEN [nat (IN,OUT) dynamic interface]` | ASA network object and its NAT rule | `Asa Object List > NAME > Address` / `Nat` |
 | `clock DEV SERIAL RATE` | clock rate on a DCE serial port (lint refuses the DTE end and rates IOS rejects) | ` clock rate …` under the interface |
 | `portfast SW IFACE` | PortFast on an access port | PortFast |
 | `portsec SW IFACE [max N] [sticky] [violation protect\|restrict\|shutdown]` | port security and its options | Port Security > Enabled, Max Secure Mac, Sticky Enabled, Violation |
