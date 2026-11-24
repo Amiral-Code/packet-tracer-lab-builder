@@ -76,9 +76,10 @@ def write_reports(rows, out_dir):
         body.append(f"<tr><th>{html.escape(r['student'])}</th><td>{html.escape(r['variant'])}</td>"
                     f"<td class='n'>{score}/{total}</td><td class='n'>{pct}</td>{cells}</tr>")
     per_check = []
+    graded = [r for r in rows if r["results"]]        # unreadable files are listed, not counted
     for i, c in enumerate(checks):
-        n = sum(1 for r in rows if dict(r["results"]).get(c))
-        per_check.append(f"<li><b>{i + 1}.</b> {html.escape(c)} <span>{n}/{len(rows)} students</span></li>")
+        n = sum(1 for r in graded if dict(r["results"]).get(c))
+        per_check.append(f"<li><b>{i + 1}.</b> {html.escape(c)} <span>{n}/{len(graded)} students</span></li>")
     (out / "grades.html").write_text(f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Lab grades</title><style>
 :root {{ --bg: #fff; --fg: #1b1b1f; --ok: #1a7f37; --no: #c62828; --line: #ddd; }}

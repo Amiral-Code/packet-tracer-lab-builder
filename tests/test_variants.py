@@ -46,10 +46,6 @@ class VariantTests(unittest.TestCase):
         self.assertEqual(variants.apply("110.10.10.1 and 10.10.10.1", ({10: 99}, {}, {})), "110.10.10.1 and 10.99.10.1")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class GradeReportTests(unittest.TestCase):
     def test_reports_list_every_student_and_check(self):
         import csv
@@ -66,3 +62,7 @@ class GradeReportTests(unittest.TestCase):
             self.assertEqual(table[2][5], "FAIL")
             self.assertEqual(table[3][-1], "no student network")
             self.assertIn("1/2 students", open(html_path).read())
+
+
+if __name__ == "__main__":
+    unittest.main()
