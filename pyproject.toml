@@ -37,4 +37,4 @@ packages = ["src/pt_lab_builder"]
 "examples" = "pt_lab_builder/recipes"
 
 [tool.hatch.build.targets.sdist]
-include = ["src", "skills", "examples", "tests", "README.md", "LICENSE", "NOTICE", "CMakeLists.txt", "pyproject.toml"]
+include = ["src", "skills", "examples", "tests", "docs", "README.md", "CHANGELOG.md", "LICENSE", "NOTICE", "CMakeLists.txt", "pyproject.toml"]
