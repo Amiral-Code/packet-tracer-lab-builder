@@ -6,11 +6,16 @@ This project is independent of Cisco. Cisco Packet Tracer and Cisco device data 
 
 ## Current status
 
-The project is an alpha. Logical topology generation, configuration/troubleshooting activities, instruction pages,
-grading (addresses, interface state, VLANs, access and trunk ports, static and OSPF routes, STP priority, any
-running-config line, ICMP reachability, and TCP service outcomes), weighted partial credit, and Physical placement work. Activities can use
-elapsed/countdown timing, answer-convergence delay, custom overall feedback, profile locking, and an Activity Wizard
-password. Multi-site Physical layouts and student cabling labs work; grading of rack position is not implemented.
+Version 0.2.0 (alpha). Configure, troubleshooting and mixed activities with Check Results grading (addresses,
+IPv4/IPv6, interface state, VLANs and trunks, routing, OSPF, STP, port security, NAT, ACLs, HSRP, DHCP, device
+access, ASA interfaces and objects, wireless WLANs, any running-config line, several right answers, per-part scores)
+and connectivity tests (ping, ping6, TCP services, UDP delivery). Devices include IOS routers and switches with
+serial, fiber and switch cards, ASA firewalls, home routers, modems, clouds, access points and wireless hosts.
+Physical mode, timers, locking and student cabling labs work.
+
+Every example is proven in Packet Tracer itself: kept and value-identical through Packet Tracer's own save, and
+solved by Packet Tracer from its start state to full marks (the live check). See `docs/examples.md`,
+`docs/instructors.md` and `CHANGELOG.md`; contributors start with `docs/contributing.md`.
 
 ## Requirements
 
@@ -146,7 +151,7 @@ For everything Packet Tracer activities can do, and what the builder uses so far
 Run the standard-library test suite:
 
 ```bash
-PYTHONPATH=src python -m unittest discover -s tests -v
+PYTHONPATH=src:tests python -m unittest discover -s tests -v
 ```
 
 The repository deliberately contains no extracted Cisco or course assets. Integration tests use paths supplied through environment variables.
