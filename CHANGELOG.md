@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (2026-11-24)
 
 - Structured cabling: copper patch panels and wall mounts (`patch-panel`, `wall-mount`), their jacks and
   punch-downs, and each run graded with Packet Tracer's own "Link to PEER > Connects to PORT" item, the way
