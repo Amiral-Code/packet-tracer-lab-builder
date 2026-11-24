@@ -385,6 +385,13 @@ class Topology:
         self.macs = set()
         self.devices = {}
         self.keys = {}
+        # cable drawings left by the source file (segments, bends): they point at links by index, so Packet Tracer
+        # attached them to this lab's cables (observed: a stray green segment on the second cable of every lab)
+        for holder in self.root.iter("ParentPhyObject"):
+            for tag in ("GeoConnectionItems", "BreakPointItems", "GroupPointItems"):
+                for h in holder.findall(tag):
+                    for x in list(h):
+                        h.remove(x)
         nodes, parent = physical_index(self.root)
         self._phys_tpl = nodes[self.meta["node_uuid"]]
         self._phys_parent = parent[self._phys_tpl]
@@ -532,6 +539,58 @@ class Topology:
                 "eMultiMode": "eFiber", "eCoaxial": "eCoaxial", "ePhoneLine": "ePhoneLine"}.get(cable, "eCopper")
         return link(self.root, self.devices[a] if isinstance(a, str) else a, port_a,
                     self.devices[b] if isinstance(b, str) else b, port_b, cable=cable, kind=kind, like=self._link_tpl)
+
+    def route(self, lk, a, b, bends=(), color=None):
+        """Bend points and colour of a cable in the Physical view, as Packet Tracer 9 saves them (sample saved by the
+        author): the cable becomes segments (GEOCONNECTIONITEM, from device to bend to device, in the coordinates of
+        the room both devices are in) joined by BREAKPOINTITEMs, under the GEOVIEW_GRAPHICSITEMS entry of that room;
+        `Link` is the cable's index in the network's link list, the colour is also the cable's GEO_VIEW_COLOR."""
+        color = color or "#000000"
+        if color != "#000000" or bends:
+            c = lk.find("CABLE")
+            gc = c.find("GEO_VIEW_COLOR")
+            if gc is None:
+                gc = ET.Element("GEO_VIEW_COLOR")
+                c.insert(list(c).index(c.find("TYPE")) if c.find("TYPE") is not None else len(c), gc)
+            gc.text = color
+        if not bends:
+            return
+        paths = [self.devices[n].findtext("WORKSPACE/PHYSICAL") for n in (a, b)]
+        rooms = [pth.rsplit(",", 1)[0] for pth in paths]
+        if rooms[0] != rooms[1]:
+            raise ValueError(f"bends on {a}-{b}: both devices must be in the same room or rack")
+        pw = self.root.find("PHYSICALWORKSPACE")
+        def xy(pth):
+            u = pth.rsplit(",", 1)[1]
+            node = next(n for n in pw.iter("NODE") if n.findtext("UUID_STR") == u)
+            return int(float(node.findtext("X"))), int(float(node.findtext("Y")))
+        gi = self.root.find(".//GEOVIEW_GRAPHICSITEMS")
+        holder = next((h for h in gi.findall("ParentPhyObject") if h.findtext("Path") == rooms[0]), None)
+        if holder is None:
+            holder = copy.deepcopy(gi.find("ParentPhyObject"))
+            holder.find("Path").text = rooms[0]
+            for child in holder:
+                if child.tag != "Path":
+                    for x in list(child):
+                        child.remove(x)
+            gi.append(holder)
+        segs, brks = holder.find("GeoConnectionItems"), holder.find("BreakPointItems")
+        index = list(self.root.find("NETWORK/LINKS")).index(lk)
+        pts = [xy(paths[0])] + [(int(x), int(y)) for x, y in bends] + [xy(paths[1])]
+        first = len(segs)
+        for i in range(len(pts) - 1):
+            g = ET.SubElement(segs, "GEOCONNECTIONITEM")
+            for tag, value in (("StartX", pts[i][0]), ("StartY", pts[i][1]), ("EndX", pts[i + 1][0]),
+                               ("EndY", pts[i + 1][1]), ("Color", color), ("PhysicalObject1", paths[0]),
+                               ("PhysicalObject2", paths[1]), ("StartCable", 0),
+                               ("IsStartCable", "true" if i == 0 else "false"),
+                               ("IsEndCable", "true" if i == len(pts) - 2 else "false"), ("GroupPoints", 0),
+                               ("Link", index)):
+                ET.SubElement(g, tag).text = str(value)
+        for i, (x, y) in enumerate(pts[1:-1]):
+            bp = ET.SubElement(brks, "BREAKPOINTITEM")
+            for tag, value in (("X", x), ("Y", y), ("Cable1", first + i), ("Cable2", first + i + 1)):
+                ET.SubElement(bp, tag).text = str(value)
 
     def rect(self, x1, y1, x2, y2, rgb=(170, 255, 255), outline="#000000"):
         rs = self.root.find("RECTANGLES")

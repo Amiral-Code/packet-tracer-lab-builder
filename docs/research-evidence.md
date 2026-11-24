@@ -488,3 +488,18 @@ inside Packet Tracer (a File Script Module writing its findings to a file).
   through it, leases and pings). The report marks the start score as "with the GUI-only settings preloaded"; the true
   start network was scored by a plain run (wlc-clinic-wlan 0/10).
 
+## Cable bend points and colours (2026-11-24)
+
+Source: a file saved for the purpose by the author (PT 9.0.1: two PCs, one copper cable, two bend points, coloured).
+
+- Colour: `CABLE/GEO_VIEW_COLOR` (#rrggbb).
+- Bends are not in the LINK: `PACKETTRACER5/.../GEOVIEW_GRAPHICSITEMS/ParentPhyObject[Path = the room both devices
+  are in]` holds the cable as segments `GeoConnectionItems/GEOCONNECTIONITEM` (StartX/Y, EndX/Y in the room's
+  coordinates, the ends at the devices' own Physical node X/Y; Color; PhysicalObject1/2 = the devices' physical
+  paths; IsStartCable/IsEndCable; Link = the cable's index in NETWORK/LINKS) and `BreakPointItems/BREAKPOINTITEM`
+  (X, Y, Cable1/Cable2 = the indices of the two segments it joins, within that room).
+- The library's base topology carried such a drawing from its source file (Link 1); Packet Tracer attached it to
+  every generated lab's second cable and recoloured it. Generated topologies now start without drawings.
+- Proof: a lab with one cable bent twice and coloured, another only coloured: after Packet Tracer's save, both bends,
+  their joins, the segments and both colours are unchanged.
+

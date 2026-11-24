@@ -74,6 +74,11 @@ these optics (a link read as multimode stays down on them); `cable = "eSingleMod
 Access points `ap` (AccessPoint-PT), `ap-n`, `ap-ac` (Ethernet `Port 0`) and lightweight `lap`, `lap-3702i`
 (`GigabitEthernet0`) take a straight-through cable to a switch.
 
+Cable routing in the Physical view: a `[[link]]` may take `color = "#ff5500"` (the cable's colour) and
+`bends = [[x, y], ...]` (bend points, in the coordinates of the room or rack both devices are in, the same as the
+devices' own Physical positions); the cable is drawn device -> each bend -> device. Both ends must be in the same
+room or rack. Bends only appear on cables that exist in that network (a student link has them in the answer only).
+
 Structured cabling: `patch-panel` (Copper Patch Panel: `Jack1`-`Jack24` at the front, `PunchDown1`-`PunchDown24` at
 the back) and `wall-mount` (Copper Wall Mount: `Jack1`-`Jack4`, `PunchDown1`-`PunchDown4`). Put the panel in the
 rack and wall mounts in the office (`physical = "building"`). Every run is straight-through: switch port to panel

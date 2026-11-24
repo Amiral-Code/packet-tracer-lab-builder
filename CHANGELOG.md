@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Cable bend points and colours in the Physical view: `bends = [[x, y], ...]` and `color = "#rrggbb"` on a link,
+  written as Packet Tracer 9 saves them (segments joined by break points), kept unchanged through Packet Tracer's
+  own save.
+- Fixed: every generated lab carried a stray cable drawing from the library's source file, which Packet Tracer
+  attached to the lab's second cable in the Physical view.
+
 ## 0.3.1 (2026-11-24)
 
 - Live check, solve mode, now covers wireless labs: settings only a GUI can make (a WLC's WLANs and interfaces, a

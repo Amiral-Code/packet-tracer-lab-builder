@@ -29,6 +29,26 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(router.findtext("WORKSPACE/PHYSICAL").split(",")[-2], site["rack"].findtext("UUID_STR"))
         self.assertEqual(pc.findtext("WORKSPACE/PHYSICAL").split(",")[-2], site["building"].findtext("UUID_STR"))
 
+    def test_cable_bends_are_segments_joined_by_break_points(self):
+        topology = ptbuild.Topology()
+        self.assertEqual(len(list(topology.root.iter("GEOCONNECTIONITEM"))), 0)   # no drawings from the source
+        topology.configure_physical({"city": "Test City", "building": "Test Building",
+                                     "closet": "Test MDF", "rack": "Test Rack"})
+        sw = topology.add("switch-2960", "SW1", 100, 100, "building")
+        topology.add("pc", "PC1", 200, 200, "building")
+        topology.add("pc", "PC2", 300, 200, "building")
+        topology.link("SW1", "FastEthernet0/2", "PC2", "FastEthernet0")
+        lk = topology.link("SW1", "FastEthernet0/1", "PC1", "FastEthernet0")
+        topology.route(lk, "SW1", "PC1", [[10, 20], [30, 40]], "#ff5500")
+        segs = list(topology.root.iter("GEOCONNECTIONITEM"))
+        self.assertEqual([(g.findtext("StartX"), g.findtext("StartY")) for g in segs][1:], [("10", "20"), ("30", "40")])
+        self.assertEqual({g.findtext("Link") for g in segs}, {"1"})           # the second cable of the network
+        self.assertEqual([g.findtext("IsStartCable") for g in segs], ["true", "false", "false"])
+        self.assertEqual([(b.findtext("Cable1"), b.findtext("Cable2")) for b in topology.root.iter("BREAKPOINTITEM")],
+                         [("0", "1"), ("1", "2")])
+        self.assertEqual(lk.findtext("CABLE/GEO_VIEW_COLOR"), "#ff5500")
+        self.assertEqual(segs[0].findtext("PhysicalObject1"), sw.findtext("WORKSPACE/PHYSICAL"))
+
     def test_example_builds_and_round_trips(self):
         root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as directory:

@@ -576,7 +576,9 @@ def build_topology(spec, configs, pcs, which="answer"):
         (na, pa), (nb, pb) = lk["a"].split(None, 1), lk["b"].split(None, 1)
         pa, pb = long_if(pa), long_if(pb)
         cable = lk.get("cable") or cable_for(models[na], models[nb], pa, pb)
-        t.link(na, pa, nb, pb, cable=cable)
+        made = t.link(na, pa, nb, pb, cable=cable)
+        if lk.get("bends") or lk.get("color"):    # tidy cabling in the Physical view
+            t.route(made, na, nb, lk.get("bends", []), lk.get("color"))
         if spec["lab"].get("labels", False):  # optional own interface notes (Packet Tracer shows port names on hover)
             for (n, p), (m, _) in (((na, pa), (nb, pb)), ((nb, pb), (na, pa))):
                 (x, y), (x2, y2) = pos[n], pos[m]
