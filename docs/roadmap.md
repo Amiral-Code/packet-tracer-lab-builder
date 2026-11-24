@@ -103,7 +103,9 @@ Live-confirmed 2026-11-23 (`feature-probe-2.pka`, Check Results **40/40**, Conne
   links in Packet Tracer 9's format, `ap-n`, `ap-ac`, `lap-3702i`, access-point port names fixed (`Port 0`);
   `examples/fiber-campus-uplink.toml` proven by round trip and live check. The ISR4331 with NIM-ES2-4 exists only
   in two labs outside the library sources (T-Labs) and is left out.
-- Module insertion into an empty slot (NIM-ES2-4, SFP optics, any card mix not found whole in a file).
+- ~~**Cards in empty slots**~~ `modules = [...]`: the library keeps a clean copy of every card in the user's files and
+  where it was seen; the builder fits it, names its ports by bay and starts them shut down.
+  `examples/serial-card-upgrade.toml` proven by round trip (8/8 values) and live check (0 -> 8/8, 1/1).
 - ~~**ASA labs**~~ `asa-5506x`/`asa-5505`, ASA CLI configs, native items (`nameif`, `seclevel`, `object`, `acl`,
   `ip`, `up`), automatic answer convergence, `inspect http` lint; `examples/asa-edge-firewall.toml` proven by round
   trip; the same lab live-confirmed as a probe (14/14, 2/2).

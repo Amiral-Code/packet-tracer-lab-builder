@@ -211,6 +211,30 @@ def link(root, dev_a, port_a, dev_b, port_b, cable="eStraightThrough", kind="eCo
     return lk
 
 
+def insert_cards(root, device, cards, used_macs=None):
+    """Fit interface cards into a device's empty card slots: [(card file, bay)]. The slot for bay N is found the
+    way library.card_bays numbers them; each card is a copy of a real card from the user's files, with new MACs."""
+    from . import library
+    used_macs = used_macs if used_macs is not None else {m.text for m in root.iter("MACADDRESS") if m.text}
+    slots = [sl for sl in device.iter("SLOT") if sl.findtext("TYPE") == "eInterfaceCard"]
+    bays = library.card_bays(device)
+    for path, bay in cards:
+        i = next(k for k, (b, empty) in enumerate(bays) if b == bay)
+        slot = slots[i]
+        for old in slot.findall("MODULE"):            # an empty slot may hold a blank cover
+            slot.remove(old)
+        card = copy.deepcopy(ET.parse(path).getroot())
+        for p in card.iter("PORT"):
+            if p.find("POWER") is not None:   # a new card's interfaces come up shut down, as on a real router
+                p.find("POWER").text = "false"
+            m = p.find("MACADDRESS")
+            if m is not None and m.text:
+                m.text = new_mac(used_macs)
+                if p.find("BIA") is not None:
+                    p.find("BIA").text = m.text
+        slot.append(card)
+
+
 def cloud_connections(device, pairs):
     """A Cloud's cable/DSL mapping, as Packet Tracer stores it: MODEM_CONNECTIONS pairs a coax or modem (phone) port
     with an Ethernet port; MODEM_CONNECTION_TYPES marks that Ethernet port as DSL (true) or cable (false)."""
@@ -238,6 +262,7 @@ class Topology:
     t.rect(x1, y1, x2, y2, (170, 255, 255)); t.note("text", x, y); t.save_xml(path)"""
 
     def __init__(self):
+        self.extra_ports = {}
         self.lib = library_dir()
         self.tree = ET.parse(self.lib / "base.xml")
         self.root = self.tree.getroot()
@@ -382,8 +407,8 @@ class Topology:
         return self.index[key]["interfaces"]
 
     def ports(self, name):
-        """Port names of a device in this topology (from its template)."""
-        return self.index[self.keys[name]]["interfaces"]
+        """Port names of a device in this topology (its template's, plus any interface card fitted)."""
+        return self.index[self.keys[name]]["interfaces"] + self.extra_ports.get(name, [])
 
     def link(self, a, port_a, b, port_b, cable="eStraightThrough"):
         for dev, port in ((a, port_a), (b, port_b)):   # a link to a missing port makes PT refuse the file

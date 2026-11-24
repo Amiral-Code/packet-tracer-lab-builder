@@ -139,7 +139,16 @@ def lint(spec) -> Issues:
         if d.get("model") not in index:
             issues.error(f"{name}: unknown model {d.get('model')!r} (see `ptlab models`)")
         model[name] = d.get("model")
-    ports = {n: index.get(m, {}).get("interfaces", []) for n, m in model.items()}
+    cards = labgen.card_index()
+    ports = {}
+    for d in spec.get("device", []):
+        if d.get("name") not in model:
+            continue
+        ports[d["name"]] = labgen.device_ports(d, index, cards)
+        try:
+            labgen.card_plan(d, index, cards)
+        except ValueError as e:
+            issues.error(f"{d['name']}: modules: {e}")
 
     def endpoint(text, where):
         parts = text.split(None, 1)

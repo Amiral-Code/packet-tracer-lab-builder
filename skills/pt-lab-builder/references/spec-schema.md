@@ -38,6 +38,11 @@ maps its provider ports with `connect = [["Coaxial7", "Ethernet6"]]` (cable) or 
 (DSL). Coax and phone links are chosen automatically. Port names containing a space are written as Packet
 Tracer shows them, quoted in grade statements: `cable MODEM "Port 0" ISP-CLOUD Coaxial7`.
 
+Interface cards: `modules = ["HWIC-2T"]` on a router fits cards into its empty slots, in slot order (copies of
+real cards from the user's files; `ptlab init` lists each card and the chassis it was seen in, the only ones it may
+go into). Ports are named by bay: 1841/1941/2911 HWIC slot n gives `Serial0/n/x`, ISR4321/4331 NIM bay n gives
+`Serial0/n/x` with bays 1 and 2. A fitted card's interfaces start shut down and unconfigured, as on real hardware.
+
 Fiber and access points: `router-2911-sfp` (HWIC-1GE-SFP card with a GLC-LH-SMD optic: fiber `G0/0/0`) and
 `l3switch-3650-fiber` (GLC-LH-SMD optics: fiber `G1/1/1`-`G1/1/3`) are taken whole from the user's files. Fiber
 links are chosen automatically and written as Packet Tracer 9 stores them, with the fiber type: single-mode between

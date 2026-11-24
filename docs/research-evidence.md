@@ -360,3 +360,15 @@ What the live check found that no file-level check could:
   single-mode optics both ports stay down: `verify --values` showed Port Up 0 in the answer network. Written as
   single-mode, the answer network's ports come up (14/14 values) and the live check passes (0 -> 14/14, 1/1).
 
+## Iteration 3: cards in empty slots (2026-11-24)
+
+- An empty card slot is a `SLOT` (`TYPE` eInterfaceCard) with no `MODULE` (or a `WIC-Cover`/`NIM-Cover`). A card is
+  a `MODULE` (`TYPE` eInterfaceCard, `MODEL`) holding its `PORT`s; copying one from a real router into another's
+  empty slot works: Packet Tracer kept every item and the card's serial link came up (live check).
+- Bay numbering from the user's files: HWIC/WIC slots are 0/0, 0/1, ... on 1841/1941/2911; NIM bays are 0/1, 0/2 on
+  ISR4321/4331 (built-in ports are 0/0). Cards seen: HWIC-2T (1841, 1941, 2911), WIC-2T (1841, 2811), NIM-2T
+  (ISR4321, ISR4331), HWIC-1GE-SFP (2911), WIC-1ENET and HWIC-8A (1841), HWIC-AP-AG-B (2811).
+- A copied card keeps the source lab's port state (`POWER` true), so its interface counted as up before the
+  student did anything; fitted cards now start with `POWER` false and `no ip address` / `shutdown` in the factory
+  configuration (start 0/8 instead of 1/8).
+

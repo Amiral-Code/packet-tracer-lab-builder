@@ -98,6 +98,56 @@ SHOWN_NEGATIONS = {
 }
 
 
+def index_all():
+    """The device index `ptlab init` wrote: {model key: {...}}."""
+    import json
+    with open(library_dir() / "devices" / "index.json", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def card_index():
+    """The interface cards `ptlab init` found: {card: {"file", "chassis", "ports"}} (empty if none)."""
+    import json
+    path = library_dir() / "devices" / "cards.json"
+    return json.load(open(path, encoding="utf-8")) if path.exists() else {}
+
+
+def card_plan(device, index, cards):
+    """[(card, bay, [port names])] for a spec device's `modules = [...]`, filling its empty bays in order.
+    Raises ValueError with a readable reason."""
+    wanted = device.get("modules") or []
+    if not wanted:
+        return []
+    item = index.get(device["model"], {})
+    bays = list(item.get("card_bays", []))
+    out = []
+    for card in wanted:
+        if card not in cards:
+            raise ValueError(f"no interface card {card!r} in the library (known: {', '.join(sorted(cards)) or 'none'})")
+        if item.get("model") not in cards[card]["chassis"]:
+            raise ValueError(f"{card} was only seen in {', '.join(cards[card]['chassis'])}, not in a {item.get('model')}")
+        if not bays:
+            raise ValueError(f"{device['name']} has no free slot left for {card}")
+        bay = bays.pop(0)
+        stems = {"eSmartSerial": "Serial", "eSerial": "Serial", "eCopperGigabitEthernet": "GigabitEthernet",
+                 "eFiberGigabitEthernet": "GigabitEthernet", "eGigabitEthernet": "GigabitEthernet",
+                 "eCopperFastEthernet": "FastEthernet", "eFiberFastEthernet": "FastEthernet", "eCopperEthernet": "Ethernet"}
+        names = [f"{stems[t]}0/{bay}/{i}" for i, t in enumerate(t for t in cards[card]["ports"] if t in stems)]
+        out.append((card, bay, names))
+    return out
+
+
+def device_ports(device, index, cards=None):
+    """All port names of a spec device: its template's plus those of the cards it asks for."""
+    ports = list(index.get(device.get("model"), {}).get("interfaces", []))
+    try:
+        for _, _, names in card_plan(device, index, cards if cards is not None else card_index()):
+            ports += names
+    except ValueError:
+        pass
+    return ports
+
+
 def index_interfaces(model):
     """A library model's port names, from the device index `ptlab init` wrote."""
     import json
@@ -492,6 +542,12 @@ def build_topology(spec, configs, pcs, which="answer"):
     for d in spec["device"]:
         t.add(d["model"], d["name"], d["x"], d["y"], d.get("physical"), site=site_of.get(d["name"]))
         models[d["name"]] = d["model"]
+        if d.get("modules"):    # interface cards fitted into empty slots (copies of real cards from the library)
+            cards = card_index()
+            plan = card_plan(d, t.index, cards)
+            ptbuild.insert_cards(t.root, t.devices[d["name"]], [(library_dir() / "devices" / cards[c]["file"], bay)
+                                                                for c, bay, _ in plan], t.macs)
+            t.extra_ports[d["name"]] = [n for _, _, names in plan for n in names]
         if d.get("connect"):   # a Cloud's cable/DSL mapping: [["Coaxial7", "Ethernet6"], ["Modem4", ...]]
             ptbuild.cloud_connections(t.devices[d["name"]], [tuple(p) for p in d["connect"]])
     cidr = {(r[0], long_if(r[1])): r[2] for r in addressing_rows(spec)}
@@ -548,6 +604,16 @@ def configs_for(spec, which):
         if tpl.findtext("ENGINE/TYPE") not in IOS_TYPES:   # home routers, modems, clouds, WLCs: no IOS
             continue
         tpl_cfg[d["name"]] = [l.text or "" for l in tpl.findall("ENGINE/RUNNINGCONFIG/LINE")]
+        if d.get("modules"):    # a fitted card's interfaces start unconfigured and shut down
+            new = []
+            for _, _, names in card_plan(d, index_all(), card_index()):
+                for n in names:
+                    new += [f"interface {n}", " no ip address", " shutdown", "!"]
+            cfg_lines = tpl_cfg[d["name"]]
+            at = next((i for i, l in enumerate(cfg_lines) if l.startswith("interface Vlan")), None)
+            if at is None:
+                at = next((i for i, l in enumerate(cfg_lines) if l == "end"), len(cfg_lines))
+            tpl_cfg[d["name"]] = cfg_lines[:at] + new + cfg_lines[at:]
         if tpl.findtext("ENGINE/TYPE") == "ASA":     # its physical ports, in Packet Tracer's order
             asa[d["name"]] = [p for p in index_interfaces(d["model"]) if p[-1].isdigit()]
     cfg = spec.get("config", {})

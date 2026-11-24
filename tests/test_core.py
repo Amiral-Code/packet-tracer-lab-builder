@@ -132,6 +132,21 @@ class CoreTests(unittest.TestCase):
         self.assertEqual((lk.findtext("TYPE"), lk.findtext("CABLE/TYPE"), lk.findtext("CABLE/OVERWITE_MISMATCH_FIBER")),
                          ("eFiber", "eSingleMode", "false"))
 
+    def test_cards_fill_empty_bays_and_name_their_ports(self):
+        index = {"router-isr4331": {"model": "ISR4331", "card_bays": [1, 2], "interfaces": ["GigabitEthernet0/0/0"]},
+                 "router-1941": {"model": "1941", "card_bays": [0, 1], "interfaces": ["GigabitEthernet0/0"]}}
+        cards = {"NIM-2T": {"chassis": ["ISR4321", "ISR4331"], "ports": ["eSmartSerial", "eSmartSerial"]},
+                 "HWIC-2T": {"chassis": ["1941", "2911"], "ports": ["eSmartSerial", "eSmartSerial"]}}
+        hq = {"name": "HQ", "model": "router-isr4331", "modules": ["NIM-2T", "NIM-2T"]}
+        self.assertEqual(labgen.card_plan(hq, index, cards),
+                         [("NIM-2T", 1, ["Serial0/1/0", "Serial0/1/1"]), ("NIM-2T", 2, ["Serial0/2/0", "Serial0/2/1"])])
+        self.assertIn("Serial0/0/1", labgen.device_ports({"name": "B", "model": "router-1941", "modules": ["HWIC-2T"]},
+                                                         index, cards))
+        with self.assertRaisesRegex(ValueError, "only seen in"):
+            labgen.card_plan({"name": "B", "model": "router-1941", "modules": ["NIM-2T"]}, index, cards)
+        with self.assertRaisesRegex(ValueError, "no free slot"):
+            labgen.card_plan({"name": "B", "model": "router-1941", "modules": ["HWIC-2T"] * 3}, index, cards)
+
     def test_cloud_connections_are_written_like_packet_tracer(self):
         from pt_lab_builder import ptbuild
         cloud = ET.fromstring("<DEVICE><ENGINE><MODEM_CONNECTIONS><CONNECTION/></MODEM_CONNECTIONS></ENGINE></DEVICE>")

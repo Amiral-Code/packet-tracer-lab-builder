@@ -1,0 +1,110 @@
+[lab]
+id = "serial-card-upgrade"
+title = "New Cards, New Line: Bringing Up a Serial Link"
+level = 2
+kind = "configure"
+exam = "CCNA 1.1 / 1.3 - router interface modules, serial links, static routing"
+time = 25
+scenario = """
+The branch router has just received an HWIC-2T card and the head-office router an NIM-2T, so the two sites can
+be joined by a leased serial line. The cards are in, the cable is in, and nothing is configured.
+"""
+objectives = [
+  "Find the serial interfaces a newly fitted card provides (show ip interface brief, show controllers)",
+  "Address a serial point-to-point link and set the clock rate on the DCE end",
+  "Configure static routes between two sites",
+]
+
+[[device]]
+name = "HQ"
+model = "router-isr4331"
+modules = ["NIM-2T"]
+x = 300
+y = 140
+[[device]]
+name = "BRANCH"
+model = "router-1941"
+modules = ["HWIC-2T"]
+x = 620
+y = 140
+[[device]]
+name = "HQ-PC"
+model = "pc"
+x = 300
+y = 320
+[[device]]
+name = "BR-PC"
+model = "pc"
+x = 620
+y = 320
+
+[[link]]
+a = "HQ S0/1/0"
+b = "BRANCH S0/0/0"
+[[link]]
+a = "HQ G0/0/0"
+b = "HQ-PC Fa0"
+[[link]]
+a = "BRANCH G0/0"
+b = "BR-PC Fa0"
+
+[addressing]
+rows = [
+  ["HQ",     "S0/1/0", "10.9.9.1/30",     ""],
+  ["HQ",     "G0/0/0", "192.168.1.1/24",  ""],
+  ["BRANCH", "S0/0/0", "10.9.9.2/30",     ""],
+  ["BRANCH", "G0/0",   "192.168.2.1/24",  ""],
+  ["HQ-PC",  "Fa0",    "192.168.1.10/24", "192.168.1.1"],
+  ["BR-PC",  "Fa0",    "192.168.2.10/24", "192.168.2.1"],
+]
+
+[config.answer]
+HQ = """
+interface G0/0/0
+ ip address 192.168.1.1 255.255.255.0
+ no shutdown
+interface S0/1/0
+ ip address 10.9.9.1 255.255.255.252
+ clock rate 64000
+ no shutdown
+ip route 192.168.2.0 255.255.255.0 10.9.9.2
+"""
+BRANCH = """
+interface G0/0
+ ip address 192.168.2.1 255.255.255.0
+ no shutdown
+interface S0/0/0
+ ip address 10.9.9.2 255.255.255.252
+ no shutdown
+ip route 192.168.1.0 255.255.255.0 10.9.9.1
+"""
+
+[[part]]
+title = "Find the new interfaces"
+intro = "A card adds interfaces named after the slot it sits in."
+steps = [
+  "On each router, `show ip interface brief`: which serial interfaces appeared?",
+  "In each router's Physical tab, find the card: the NIM-2T sits in NIM bay 1 (Serial0/1/x), the HWIC-2T in HWIC slot 0 (Serial0/0/x).",
+]
+hint = "The middle number of a serial interface name is the slot of the card it lives on."
+why = "Interface names follow the hardware: knowing them tells you where a cable goes before you see the rack."
+
+[[part]]
+title = "Bring the line up"
+intro = "HQ's end of the cable is the DCE."
+steps = [
+  "Address HQ S0/1/0 10.9.9.1/30 with clock rate 64000, and BRANCH S0/0/0 10.9.9.2/30; enable both.",
+  "Address both LAN interfaces and add a static route on each router to the other site's LAN.",
+  "Check: HQ-PC pings BR-PC.",
+]
+
+[grade]
+items = [
+  "ip HQ S0/1/0 10.9.9.1/30",
+  "ip BRANCH S0/0/0 10.9.9.2/30",
+  "up HQ S0/1/0",
+  "clock HQ S0/1/0 64000",
+  "route HQ 192.168.2.0/24 10.9.9.2",
+  "route BRANCH 192.168.1.0/24 10.9.9.1",
+  "ping HQ-PC BR-PC",
+]

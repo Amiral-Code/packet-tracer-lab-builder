@@ -279,6 +279,38 @@ def _prune_physical_devices(root, template_uuid):
             parents[node].remove(node)
 
 
+# -------------------------------------------------------------- interface cards for empty slots
+PORT_STEMS = {"eSmartSerial": "Serial", "eSerial": "Serial", "eCopperGigabitEthernet": "GigabitEthernet",
+              "eFiberGigabitEthernet": "GigabitEthernet", "eGigabitEthernet": "GigabitEthernet",
+              "eCopperFastEthernet": "FastEthernet", "eFiberFastEthernet": "FastEthernet", "eCopperEthernet": "Ethernet"}
+
+
+def card_bays(device):
+    """Bay number of each interface-card slot, in slot order, and whether it is empty. On ISR 4000 routers the NIM bays
+    are 0/1 and 0/2 (bay 0 is the built-in ports); on 1841/1941/2811/2911 the HWIC/WIC slots are 0/0, 0/1, ...
+    (seen in the user's files: ISR4321 NIM-2T -> Serial0/1/x, 1941 HWIC-2T -> Serial0/0/x, 2911 HWIC-1GE-SFP ->
+    GigabitEthernet0/0/0)."""
+    model = device.find("ENGINE/TYPE").get("model") or ""
+    offset = 1 if model.startswith("ISR4") else 0
+    slots = [sl for sl in device.iter("SLOT") if sl.findtext("TYPE") == "eInterfaceCard"]
+    out = []
+    for i, sl in enumerate(slots):
+        mod = sl.find("MODULE")
+        empty = mod is None or mod.findtext("MODEL") in EMPTY_CARDS
+        out.append((i + offset, empty))
+    return out
+
+
+def card_port_names(card, bay):
+    """Port names of a card in a bay: Serial0/1/0, Serial0/1/1, ..."""
+    names, count = [], {}
+    for p in card.findall("PORT"):
+        stem = PORT_STEMS.get(p.findtext("TYPE") or "")
+        if stem:
+            names.append(f"{stem}0/{bay}/{len(names)}")
+    return names
+
+
 def build(sources, destination=None):
     """Create local templates from .pkt/.pka files the user is allowed to use."""
     destination = Path(destination or library_dir())
@@ -293,6 +325,7 @@ def build(sources, destination=None):
     if not files:
         raise RuntimeError("no .pkt or .pka files found under the supplied source folders")
     found = {}
+    cards = {}
     base = None
     activity_base = None
     for rank, label, filename in files:
@@ -312,6 +345,15 @@ def build(sources, destination=None):
                 key = library_key(device)
                 if key and (key not in found or score > found[key][0]):
                     found[key] = (score, copy.deepcopy(device), label, filename, version)
+                chassis = device.find("ENGINE/TYPE").get("model") if device.find("ENGINE/TYPE") is not None else None
+                for mod in device.iter("MODULE"):        # interface cards, for empty slots of other routers
+                    card = mod.findtext("MODEL")
+                    if mod.findtext("TYPE") != "eInterfaceCard" or not card or card in EMPTY_CARDS:
+                        continue
+                    entry = cards.setdefault(card, {"chassis": set(), "best": None})
+                    entry["chassis"].add(chassis)
+                    if entry["best"] is None or score > entry["best"][0]:
+                        entry["best"] = (score, copy.deepcopy(mod), filename.name)
     if not found:
         raise RuntimeError("no supported Packet Tracer device models were found")
     if base is None:
@@ -347,6 +389,25 @@ def build(sources, destination=None):
                       "ios": d.find("ENGINE/TYPE").text in IOS_TYPES,
                       "version": version, "source": label, "file": filename.name, "interfaces": ifaces}
         print(f"{key:18} {index[key]['model']:16} {version:12} {label:22} {len(ifaces)} interfaces")
+    # interface cards: one clean copy of each, and the chassis models it was found in
+    (devices_out / "cards").mkdir(exist_ok=True)
+    card_index = {}
+    for card, entry in sorted(cards.items()):
+        _, mod, source_file = entry["best"]
+        for p in mod.iter("PORT"):                   # saved addresses and descriptions of the source lab
+            for tag in ("IP", "SUBNET", "DESCRIPTION", "PORT_GATEWAY"):
+                if p.find(tag) is not None:
+                    p.find(tag).text = ""
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", card)
+        ET.ElementTree(mod).write(devices_out / "cards" / f"{safe}.xml", encoding="utf-8")
+        card_index[card] = {"file": f"cards/{safe}.xml", "chassis": sorted(entry["chassis"]), "source": source_file,
+                            "ports": [p.findtext("TYPE") for p in mod.findall("PORT")]}
+        print(f"card {card:16} fits {', '.join(sorted(entry['chassis']))}")
+    with open(devices_out / "cards.json", "w", encoding="utf-8") as fh:
+        json.dump(card_index, fh, indent=1)
+    for key, item in index.items():                  # empty card bays of each template
+        d = ET.parse(devices_out / (key + ".xml")).getroot()
+        item["card_bays"] = [bay for bay, empty in card_bays(d) if empty]
     with open(devices_out / "index.json", "w", encoding="utf-8") as fh:
         json.dump(index, fh, indent=1)
     # empty base topology: keep the physical workspace (one container path + a device node template)
