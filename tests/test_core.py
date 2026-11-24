@@ -122,6 +122,12 @@ class CoreTests(unittest.TestCase):
                          [("Coaxial7", "Ethernet6"), ("Modem4", "Ethernet6")])
         self.assertEqual([c.findtext("DSL") for c in cloud.iter("CONNECTION_TYPE")], ["false", "true"])
 
+    def test_single_global_settings_replace_the_factory_value(self):
+        out = labgen.merge(["version 15.0", "hostname Switch", "spanning-tree mode pvst",
+                            "spanning-tree extend system-id", "end"], "spanning-tree mode rapid-pvst\n")
+        self.assertEqual([l for l in out if l.startswith("spanning-tree")],
+                         ["spanning-tree mode rapid-pvst", "spanning-tree extend system-id"])
+
     def test_data_directory_override(self):
         with tempfile.TemporaryDirectory() as directory:
             old = os.environ.get("PTLAB_DATA_DIR")

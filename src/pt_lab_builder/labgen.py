@@ -141,6 +141,12 @@ def asa_config(snippet, ports=()):
     return out + ["end", ""]
 
 
+# global settings that exist once: a new value replaces the factory line (it used to be added beside it, leaving
+# e.g. "spanning-tree mode pvst" and "spanning-tree mode rapid-pvst" both in a switch's configuration)
+SINGLE_SETTINGS = ("hostname ", "spanning-tree mode ", "vtp mode ", "vtp domain ", "ip domain-name ",
+                   "ip domain name ", "enable secret ", "enable password ", "ip default-gateway ", "clock timezone ")
+
+
 def merge(factory_lines, snippet):
     """Apply a CLI snippet (config-mode commands, running-config style) to a factory config."""
     base = blocks(factory_lines)
@@ -188,9 +194,11 @@ def merge(factory_lines, snippet):
                 base.append((None, [line]))
             index = {h: i for i, (h, _) in enumerate(base) if h}   # removing a line shifts every later section
             continue
-        if line.startswith("hostname "):
-            base = [(h, b) if h or not b[0].startswith("hostname ") else (None, [line]) for h, b in base]
-            continue
+        single = next((k for k in SINGLE_SETTINGS if line.startswith(k)), None)
+        if single:                                   # a setting that exists once replaces the factory value in place
+            if any(not h and b[0].startswith(single) for h, b in base):
+                base = [(h, b) if h or not b[0].startswith(single) else (None, [line]) for h, b in base]
+                continue
         base.append((None, [line]))
     out = ["!"] + head + ["!"]
     for h, body in base:

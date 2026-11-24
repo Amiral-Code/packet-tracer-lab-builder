@@ -393,22 +393,36 @@ interface Vlan99
  no shutdown
 interface Port-channel1
  description LACP_TRUNK_TO_HQ_SW1
+ switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 10,20,30,99
 interface Port-channel2
  description LACP_TRUNK_TO_HQ_SW2
+ switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 10,20,30,99
 interface Fa0/23
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30,99
  channel-group 1 mode active
  no shutdown
 interface Fa0/24
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30,99
  channel-group 1 mode active
  no shutdown
 interface Fa0/21
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30,99
  channel-group 2 mode active
  no shutdown
 interface Fa0/22
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30,99
  channel-group 2 mode active
  no shutdown
 ip access-list extended USERS-IN
@@ -446,9 +460,13 @@ interface Port-channel1
  switchport mode trunk
  switchport trunk allowed vlan 10,20,30,99
 interface Fa0/23
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30,99
  channel-group 1 mode active
  no shutdown
 interface Fa0/24
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30,99
  channel-group 1 mode active
  no shutdown
 interface G0/1
@@ -487,9 +505,13 @@ interface Port-channel2
  switchport mode trunk
  switchport trunk allowed vlan 10,20,30,99
 interface Fa0/23
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30,99
  channel-group 2 mode active
  no shutdown
 interface Fa0/24
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30,99
  channel-group 2 mode active
  no shutdown
 interface G0/1

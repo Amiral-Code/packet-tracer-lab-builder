@@ -76,6 +76,19 @@ ptlab bare work/lab.pka work/lab-bare.pka               # open + save this copy 
 ptlab verify SPEC.toml SAVED.pka --values work/lab-bare.pka   # every value equals Packet Tracer's own
 ```
 
+Then let Packet Tracer solve the lab itself: `ptlab live-prepare` copies the activity with a script (Packet Tracer's
+own JavaScript engine and API) that records the start score, adds the student's cables, types every answer
+configuration at each device's console, sets host addresses, waits, and records Check Results and the Connectivity
+Tests (run twice, as a student would) in a JSON report; `ptlab live-report` gives the verdict: no full marks at the
+start, full marks after solving. Open the copy with any harness that accepts Packet Tracer's script-privilege
+prompt; the author's Hyprland harness is `pt-live-check.sh` (opens it hidden, presses Enter on the prompt, closes
+only its own Packet Tracer).
+
+```bash
+ptlab live-prepare SPEC.toml work/lab.pka work/lab-live.pka /abs/lab-live.json --save /abs/lab-solved.pka
+ptlab live-report SPEC.toml /abs/lab-live.json
+```
+
 Use source files from the same Packet Tracer generation your learners use. A `.pka` generated from newer device templates may not open in an older Packet Tracer release.
 
 ## Install the AI skill

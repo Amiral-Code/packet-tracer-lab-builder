@@ -11,7 +11,9 @@ An iteration is done only when all of these hold:
 2. Every example passes `ptlab lint` with no errors, builds, and survives the round trip: opened and saved by Packet
    Tracer 9.0.1, then `ptlab verify SPEC SAVED.pka` reports every item and test kept and every local check passing.
 3. Every new Packet Tracer behaviour has been **seen working live**: an item turning green after a fix, a lock
-   blocking what it should, a timer counting down. Until then it is listed as "pending live check" in
+   blocking what it should, a timer counting down. Grading behaviour is checked without a person by the live check
+   (`ptlab live-prepare` / `live-report`, harness `pt-live-check.sh`): Packet Tracer itself solves the lab and
+   grades it, from 0 to full marks; GUI behaviour (locks, timers, views) still needs a person. Until then it is listed as "pending live check" in
    `docs/packet-tracer-capabilities.md`, never as done.
 4. Every new file-format fact is recorded in `docs/research-evidence.md` with its source (real file, binary
    trace, or live test), and inferences are labelled as inferences.
@@ -94,6 +96,9 @@ Live-confirmed 2026-11-23 (`feature-probe-2.pka`, Check Results **40/40**, Conne
 - ~~**Home and provider devices**~~ home router, Linksys (port names fixed), cable/DSL modems, splitter, stock
   Cloud with `connect` cable/DSL mapping, central office, cell tower; coax and phone links; IOS configuration only
   on IOS devices; `examples/home-cable-internet.toml` proven by round trip and live-confirmed (all items green, ping passes).
+- ~~**Live checks without a person**~~ `ptlab live-prepare` / `live-report` and the `pt-live-check.sh` harness:
+  Packet Tracer solves each lab (console typing, cables, hosts, fault repair) and grades it. All nine examples
+  pass unattended; it found and fixed a broken EtherChannel design in Northstar that every file-level check passed.
 - Module insertion into an empty slot (NIM-ES2-4, SFP optics, any card mix not found whole in a file).
 - ~~**ASA labs**~~ `asa-5506x`/`asa-5505`, ASA CLI configs, native items (`nameif`, `seclevel`, `object`, `acl`,
   `ip`, `up`), automatic answer convergence, `inspect http` lint; `examples/asa-edge-firewall.toml` proven by round

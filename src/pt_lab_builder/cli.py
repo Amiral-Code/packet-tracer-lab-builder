@@ -60,6 +60,16 @@ def parser() -> argparse.ArgumentParser:
     bare = sub.add_parser("bare", help="copy a built .pka without its assessment items (for verify --values)")
     bare.add_argument("built", type=Path)
     bare.add_argument("output", type=Path)
+    lp = sub.add_parser("live-prepare", help="copy a built .pka with a script that solves and grades it inside "
+                                             "Packet Tracer (open it with a harness that accepts the prompt)")
+    lp.add_argument("spec", type=Path)
+    lp.add_argument("built", type=Path)
+    lp.add_argument("output", type=Path)
+    lp.add_argument("result", type=Path, help="where the script writes its JSON report (absolute path)")
+    lp.add_argument("--save", type=Path, help="also save the solved network here (absolute path)")
+    lr = sub.add_parser("live-report", help="verdict from a live-prepare script's JSON report")
+    lr.add_argument("spec", type=Path)
+    lr.add_argument("result", type=Path)
     sub.add_parser("doctor", help="show whether the local installation is ready")
     sub.add_parser("models", help="list locally available Packet Tracer device model keys")
     return p
@@ -98,6 +108,19 @@ def main(argv: list[str] | None = None) -> int:
             issues.report(f"values (same as Packet Tracer's own: {n['same']}/{n['items']})")
             failed = failed or bool(issues.errors)
         return 1 if failed else 0
+    if args.command == "live-prepare":
+        from . import live
+        spec = labgen.load_spec(str(args.spec))
+        live.instrument(spec, str(args.built), str(args.output), args.result.resolve(),
+                        args.save.resolve() if args.save else None)
+        print(f"wrote {args.output}")
+        return 0
+    if args.command == "live-report":
+        from . import live
+        ok, lines = live.report(labgen.load_spec(str(args.spec)), str(args.result))
+        print(f"live check: {'ok' if ok else 'FAILED'}")
+        print("\n".join(lines))
+        return 0 if ok else 1
     if args.command == "bare":
         from . import validate
         validate.strip_assessment(str(args.built), str(args.output))

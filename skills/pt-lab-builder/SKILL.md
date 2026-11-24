@@ -59,7 +59,11 @@ drops assessment items it cannot find in its own answer network (already when it
 reports dropped items and connectivity tests, and runs the local checks on Packet Tracer's rewritten answer network.
 To also prove every item's value, make a copy without assessment items (`ptlab bare BUILT.pka BARE.pka`), open and
 save it the same way, and add `--values BARE.pka`: Packet Tracer fills that copy's tree from its own answer network.
-Fix every error before delivering the lab.
+Then run the live check without a person: `ptlab live-prepare SPEC BUILT.pka LIVE.pka /abs/RESULT.json --save
+/abs/SOLVED.pka`, open LIVE.pka with a harness that accepts the script-privilege prompt (on the author's machine
+`pt-live-check.sh SPEC BUILT WORKDIR` does all of it), and `ptlab live-report SPEC RESULT.json` must say ok: the
+start state is not full marks, and after the script types the answer configuration every item and connectivity
+test passes. Fix every error before delivering the lab.
 
 Use `--open` only after telling the user that Packet Tracer will appear. Validate the generated file in a compatible Packet Tracer version when GUI access is available, and never terminate a Packet Tracer process the validation did not start.
 

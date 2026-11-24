@@ -283,3 +283,67 @@ On ISR routers `show controllers serial` needs the port number (`show controller
 - `examples/asa-edge-firewall.toml`: 12/12 items and 2/2 tests kept, 12/12 values identical to Packet Tracer's own,
   9/9 local checks on its answer network.
 
+## Live checks without a person (2026-11-24)
+
+Packet Tracer can grade a lab by itself. Facts used (Packet Tracer 9.0, help pages `scriptModules*.htm` and the
+`IpcAPI` reference shipped in the AppImage, and experiments):
+
+- A `.pka` carries a File Script Module (`SCRIPT_MODULE/SCRIPTS/SCRIPT` with `ID` and base64 `CONTENT`;
+  `PT_APP_META/SECURITY_SETTINGS/PRIVILEGE`). Its scripts run when the file opens and `main()` is called; with
+  privileges declared Packet Tracer first shows a plain "Cisco Packet Tracer" window asking to allow them, and Enter
+  allows them. Without privileges nothing could be written out.
+- `ipc.appWindow().getActiveFile()` is the activity: `getCorrectAssessmentItemsCount()`,
+  `getAssessmentItemsCount()`, `getPercentageComplete()`, `runConnectivityTests()`,
+  `getLastConnectivityTestCorrectCount()`, `getLastConnectivityTestResultAt(i)` ("Correct"/"Incorrect").
+- `SystemFileManager.writeTextToFile()` writes scrambled bytes; `writePlainTextToFile()` writes the text.
+- `CiscoDevice.enterCommand(cmd, mode)` returns `{first: status, second: output}` (0 ok, 2 invalid). It refused
+  section changes in mode "" and an ASA object's `nat (inside,outside) dynamic interface` (its tokenizer chokes on
+  `(inside,outside)`; `( inside , outside )` passes). The device's console, `getConsoleLine()`, behaves like a person
+  at the CLI (`FW>`, `Password:`, `FW#`, `FW(config-network-object)#`) and accepted every line; it is what the live
+  check types into. An ASA has no `getCommandLine()`.
+- Hosts: `HostPort.setIpSubnetMask`, `setDhcpClientFlag` plus `Pc.setDhcpFlag` (the port flag alone did not make the
+  PC lease), `Pc.setDefaultGateway`, `HostPort.addIpv6Address`; a host's IPv6 gateway is set on its IPv6 process:
+  `Device.getProcess("HostIpv6").setDefaultGateway()`.
+  Cables: `LogicalWorkspace.createLink(dev1, port1, dev2, port2, type)` (8100 straight, 8101 cross, 8104 phone,
+  8106 serial with the first end DCE, 8110 coax).
+- The first connectivity-test run after the network comes up can lose packets (ARP), as a student's first Check
+  Results does; the live check runs the tests twice and reports the second run.
+- `AppWindow.fileSaveAs()` on an existing file opens a modal "Overwrite File?" dialog that stops the script.
+
+Results (final code, each run unattended, 92-203 s):
+
+| Example | Start | After solving | Connectivity tests |
+|---|---|---|---|
+| branch-cabling (student cabling) | 2/6 | 6/6 | 3/3 |
+| feature-probe | 0/11 | 11/11 | 3/3 |
+| feature-probe-2 (IPv6 hosts, ping6) | 0/38 | 38/38 | 2/2 |
+| northstar-enterprise-recovery (mixed, 6 faults) | 7/55 | 55/55 | 4/4 |
+| ts-branch-offline (troubleshooting) | 2/6 | 6/6 | 3/3 |
+| serial-wan-triangle | 0/32 | 32/32 | 3/3 |
+| home-cable-internet (coax, DHCP) | 0/11 | 11/11 | 1/1 |
+| asa-edge-firewall | 0/12 | 12/12 | 2/2 |
+| static-two-sites | 0/14 | 14/14 | 2/2 |
+
+These agree with every live result a person had produced (serial 35/35 incl. tests, home cable, ASA 14/14).
+
+What the live check found that no file-level check could:
+
+- **Northstar's answer network did not work.** Its 55 items all scored correct, the round trip and value proof
+  passed, yet every connectivity test failed. Diagnosis by script (show commands run inside Packet Tracer on the
+  answer network): both EtherChannels were suspended (`Po1(SD)`, members `(s)`), CORE1's port-channels and VLAN
+  interfaces were down, and OSPF sat in `INIT` with interfaces `WAITING` for minutes. A timeline showed why: the
+  OSPF dead timer fell from 38 to 29 s over 180 s of real time, i.e. Packet Tracer's clock had almost stopped under
+  a broadcast storm. Cause: the port-channels were trunks but their member ports carried only `channel-group`, and
+  the 3560 core had no `switchport trunk encapsulation dot1q`, so the bundles failed and the redundant switch
+  triangle looped. Bisection labs (same router models, plain OSPF; with IPv6, DHCP, default-originate; with the
+  lab's activity settings) all converged, which ruled out the routers and the activity. Fixed in the example:
+  members configured like their port-channel (encapsulation on the 3560, trunk mode, allowed VLANs) before
+  `channel-group`. Afterwards: 55/55 items, 4/4 tests, values unchanged.
+- **Troubleshooting labs need their faults undone, not only the answer typed** (a fault that shuts a port is not
+  touched by an answer that never mentions the port). The script reverses each fault first: `apply` lines are
+  negated, find/replace faults remove the faulty line and type the correct one in its section.
+- **Timing a student would not notice:** DHCP clients must start after spanning tree has opened their access ports
+  (a request sent earlier is lost and the host falls back to 169.254/16), and a routing lab needs about 90 s.
+- **Merge bug found on the way:** a setting that exists once (`spanning-tree mode`, `vtp mode`, ...) was added beside
+  the factory value instead of replacing it; it now replaces it.
+
