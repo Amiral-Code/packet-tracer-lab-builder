@@ -528,3 +528,15 @@ Sources: Packet Tracer's samples `wlc_2504_simple_wlan_wpa_radius.pkt`, `wlc_pt_
 - Proof (`wlc-clinic-enterprise`): items kept 15/15 with Packet Tracer's values; live answer mode 15/15 and ping;
   solve mode (WLC, server AAA and client preloaded) 15/15 and ping.
 
+## GNS3 export of serial links (2026-11-24)
+
+- The CCNA engine's IOU router template (i86bi-linux-l3-jk9s-15.0.1) has ethernet_adapters 2 and serial_adapters 2;
+  IOU numbers the serial adapters after the Ethernet ones (s2/0-s3/3), and the engine's link parser already takes
+  `s2/0` as adapter 2, port 0, so the engine needed no change.
+- Proof: `serial-wan-triangle` exported (three routers on serial links, OSPF): the engine's selftest PASS, before
+  16/16 checks failing, after the solution 16/16 passing (115 s).
+
+## Full live regression after the clock heartbeat (2026-11-24)
+
+All 15 examples, solve and answer modes: 30/30 runs ok, every lab at full marks with all connectivity tests passing.
+

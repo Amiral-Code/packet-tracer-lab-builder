@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (2026-11-24)
+
+All 15 examples pass the live check in both modes (30/30 runs), with the new clock heartbeat.
+
 
 - Cable bend points and colours in the Physical view: `bends = [[x, y], ...]` and `color = "#rrggbb"` on a link,
   written as Packet Tracer 9 saves them (segments joined by break points), kept unchanged through Packet Tracer's
@@ -12,6 +15,8 @@
 - Live check: a clock heartbeat. In an activity opened by a script Packet Tracer's clock barely moves on its own
   (an AP's address took 100-180 s instead of 20 s and 802.1X logins timed out); the script now drives it every 15 s
   until grading, as Packet Tracer runs for a person.
+- `ptlab gns3` exports serial links: serial ports map to the IOU router's serial adapters (s2/0-s3/3, after the
+  Ethernet adapters), address checks name them Serial2/0...; both ends must be routers.
 - Fixed: every generated lab carried a stray cable drawing from the library's source file, which Packet Tracer
   attached to the lab's second cable in the Physical view.
 

@@ -6,7 +6,7 @@ This project is independent of Cisco. Cisco Packet Tracer and Cisco device data 
 
 ## Current status
 
-Version 0.3.1 (alpha). Configure, troubleshooting and mixed activities with Check Results grading (addresses,
+Version 0.4.0 (alpha). Configure, troubleshooting and mixed activities with Check Results grading (addresses,
 IPv4/IPv6, interface state, VLANs and trunks, routing, OSPF, STP, port security, NAT, ACLs, HSRP, DHCP, device
 access, ASA interfaces and objects, wireless WLANs, any running-config line, several right answers, per-part scores)
 and connectivity tests (ping, ping6, TCP services, UDP delivery). Devices include IOS routers and switches with

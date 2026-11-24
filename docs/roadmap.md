@@ -169,10 +169,11 @@ Live-confirmed 2026-11-23 (`feature-probe-2.pka`, Check Results **40/40**, Conne
 
 ## Still open (needs a sample file or a person)
 
-- Cable bend points: none of the files seen has one (NetAcad's structured-cabling activity included).
-- ~~WLC-based WLANs~~ done 2026-11-24 (`wlc-clinic-wlan`, proven live in answer mode); RADIUS (WPA2-Enterprise) open.
+- ~~Cable bend points~~ done 2026-11-24 from a sample saved by the author (`bends`, `color` on a link).
+- ~~WLC-based WLANs~~ and ~~WPA2-Enterprise with RADIUS~~ done 2026-11-24 (`wlc-clinic-wlan`,
+  `wlc-clinic-enterprise`, proven live in both modes).
 - Variable Manager pools inside one file: checked in NetAcad files, they serve "any address in a subnet", which
   RegEx items already do; not planned.
 - The scripted scoring model (Main.js / ScoringModels.js) for messages beyond per-part scores.
-- GNS3 export of serial links, and topics only GNS3/CML can run.
+- ~~GNS3 export of serial links~~ done 2026-11-24 (IOU serial adapters s2/x-s3/x); topics only GNS3/CML can run.
 - GUI behaviours that no script can observe: locks, timers, views (a person checks these).

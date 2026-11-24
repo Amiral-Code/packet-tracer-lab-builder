@@ -31,6 +31,24 @@ def _iou(i):
     return f"e{i // 4}/{i % 4}"
 
 
+# The CCNA engine's IOU router template has 2 Ethernet adapters (e0/x, e1/x) then 2 serial adapters (s2/x, s3/x):
+# IOU numbers serial adapters after the Ethernet ones, 4 ports each.
+SERIAL_FIRST, SERIAL_PORTS = 2, 8
+
+
+def _iou_serial(i):
+    if i >= SERIAL_PORTS:
+        raise ValueError(f"more than {SERIAL_PORTS} serial ports on one router (the IOU template has 2 serial adapters)")
+    return f"s{SERIAL_FIRST + i // 4}/{i % 4}"
+
+
+def _next(m, port):
+    """The next IOU name for this PT port: serial ports and Ethernet ports are counted separately."""
+    if port.startswith("Serial"):
+        return _iou_serial(sum(1 for v in m.values() if v.startswith("s")))
+    return _iou(sum(1 for v in m.values() if v.startswith("e")))
+
+
 def port_maps(spec):
     """{device: {PT long port name: IOU name}}, ports numbered in the order links use them."""
     maps = {}
@@ -40,14 +58,14 @@ def port_maps(spec):
             port = labgen.long_if(port)
             m = maps.setdefault(name, {})
             if port not in m:
-                m[port] = _iou(len(m))
+                m[port] = _next(m, port)
     for name, port, *_ in labgen.addressing_rows(spec):          # addressed but uncabled ports get a number too
         port = labgen.long_if(port)
         if "." in port or port.startswith(("Vlan", "Loopback")):
             continue
         m = maps.setdefault(name, {})
         if port not in m:
-            m[port] = _iou(len(m))
+            m[port] = _next(m, port)
     return maps
 
 
@@ -95,7 +113,7 @@ def _checks(spec, pmaps, first4):
                 skipped.append(st)
                 continue
             checks.append({"on": w[1], "cmd": "show ip interface brief",
-                           "expect": rf"^{re.escape(iface.replace('e', 'Ethernet', 1))}\s+{re.escape(addr)}\b",
+                           "expect": rf"^{re.escape(_long_iou(iface))}\s+{re.escape(addr)}\b",
                            "desc": f"{w[1]} {iface} has {addr}"})
         elif k == "ospf":
             net = ipaddress.ip_network(w[3], strict=True)
@@ -113,6 +131,11 @@ def _checks(spec, pmaps, first4):
         else:
             skipped.append(st)
     return checks, skipped
+
+
+def _long_iou(iface):
+    """e0/1 -> Ethernet0/1, s2/0 -> Serial2/0 (as show ip interface brief prints them)."""
+    return ("Serial" if iface.startswith("s") else "Ethernet") + iface[1:] if re.fullmatch(r"[es]\d+/\d+", iface) else iface
 
 
 def _toml_str(s):
@@ -135,10 +158,12 @@ def export(spec):
     bad = [f"{d['name']} ({d['model']})" for d in spec["device"] if _kind(d["model"]) is None]
     if bad:
         raise ValueError("no GNS3/IOU equivalent for " + ", ".join(bad) + ": keep this lab in Packet Tracer")
-    serial = [lk for lk in spec.get("link", []) if "S" == lk["a"].split()[1][:1].upper() and
-              labgen.long_if(lk["a"].split()[1]).startswith("Serial")]
-    if serial:
-        raise ValueError("serial links are not exported yet (IOU numbers serial adapters separately)")
+    for lk in spec.get("link", []):        # serial links join routers (IOU serial ports exist on routers only)
+        ends = [e.split(None, 1) for e in (lk["a"], lk["b"])]
+        if any(labgen.long_if(p).startswith("Serial") for _, p in ends):
+            models = {d["name"]: d["model"] for d in spec["device"]}
+            if any(_kind(models[n]) != "R" for n, _ in ends):
+                raise ValueError(f"serial link {lk['a']} - {lk['b']}: both ends must be routers")
     pmaps = port_maps(spec)
     first4, _ = labgen.first_addresses(spec)
     lab = spec["lab"]

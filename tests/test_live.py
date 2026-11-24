@@ -87,6 +87,20 @@ class Gns3ExportTests(unittest.TestCase):
         self.assertEqual([c["cmd"] for c in lab["check"]], ["ping 10.0.0.2 -c 3", "show ip route static"])
         self.assertIn("#   hostname R1 R1", gns3export.export(self.SPEC))
 
+    def test_serial_ports_use_the_serial_adapters(self):
+        import tomllib
+        from pt_lab_builder import gns3export
+        spec = {"lab": {"title": "T", "scenario": "s"},
+                "device": [{"name": "R1", "model": "router-1941-serial"}, {"name": "R2", "model": "router-1941-serial"}],
+                "link": [{"a": "R1 G0/0", "b": "R2 G0/0"}, {"a": "R1 S0/0/0", "b": "R2 S0/0/1"}],
+                "addressing": {"rows": [["R1", "S0/0/0", "10.0.0.1/30", ""], ["R2", "S0/0/1", "10.0.0.2/30", ""]]},
+                "config": {"answer": {"R1": "interface S0/0/0\n ip address 10.0.0.1 255.255.255.252\n clock rate 64000\n"}},
+                "grade": {"items": ["ip R1 S0/0/0 10.0.0.1/30"]}}
+        lab = tomllib.loads(gns3export.export(spec))
+        self.assertEqual(lab["links"], ["R1 e0/0 - R2 e0/0", "R1 s2/0 - R2 s2/0"])
+        self.assertIn("interface s2/0", lab["solution"]["R1"])
+        self.assertEqual(lab["check"][0]["expect"][:10], "^Serial2/0")
+
     def test_devices_without_an_iou_equivalent_are_refused(self):
         from pt_lab_builder import gns3export
         spec = dict(self.SPEC, device=self.SPEC["device"] + [{"name": "FW", "model": "asa-5506x"}])

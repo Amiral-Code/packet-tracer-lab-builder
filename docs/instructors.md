@@ -33,4 +33,4 @@ already proven; a lab you changed should be proven again.
 ## When Packet Tracer is not enough
 
 `ptlab gns3 SPEC OUT.toml` compiles a lab for a GNS3 engine (IOU routers and switches, VPCS hosts), for topics
-Packet Tracer cannot run. Labs with ASAs, home gear or wireless stay in Packet Tracer.
+Packet Tracer cannot run. Serial WAN links export to IOU serial ports. Labs with ASAs, home gear or wireless stay in Packet Tracer.
