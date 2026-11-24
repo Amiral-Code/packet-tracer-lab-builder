@@ -392,3 +392,18 @@ What the live check found that no file-level check could:
   14) >= this->size() (which is 14)` whatever the arguments, so a script cannot join a client in Packet Tracer 9;
   the answer-network live check proves wireless connectivity instead (8/8, ping 1/1).
 
+## Release proof (2026-11-24, v0.2.0)
+
+- All eleven examples (the twelfth, home-wlan-security, needs the answer mode: Packet Tracer 9's API cannot join a
+  wireless client) pass the live check twice, unattended: solved by the script from the start state to full marks
+  and every connectivity test, and the answer network run live on its own (22 runs, all ok); home-wlan-security's
+  answer network passes (8/8, 1/1).
+- Per-part scores (`feature-probe-2`): 38/38 items kept with values identical to Packet Tracer's own; the saved file
+  lists the parts in `COMPONENT_LIST` and files 9, 15 and 14 items under them. A comma in a part title split the
+  comma-separated `COMPONENT_LIST` and Packet Tracer dropped that part from its items; commas become " / ".
+- A generated variant (`ptlab variants`, Northstar v01, re-addressed 10.237/172.25): live check 7/55 -> 55/55, 4/4.
+- A generated troubleshooting lab (`ptlab troubleshoot` on serial-wan-triangle, three faults): start 29/32 (each
+  fault caught), live check after repair 32/32, 3/3.
+- `ptlab gns3` export of static-two-sites: the CCNA GNS3 engine's selftest passes (8/8 failing before, 8/8 passing
+  after the solution, no broadcast storm).
+

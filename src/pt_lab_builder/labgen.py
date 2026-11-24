@@ -306,7 +306,9 @@ def load_spec(path):
             items = s.setdefault("grade", {}).setdefault("items", [])
             if st not in items:
                 items.append(st)
-            s["_part_of"][st] = part.get("title", "Part")
+            # COMPONENT_LIST is comma-separated: a comma in a title would split it (observed: Packet Tracer then
+            # dropped the part's component from its items)
+            s["_part_of"][st] = re.sub(r"\s*,\s*", " / ", part.get("title", "Part"))
     return s
 
 
