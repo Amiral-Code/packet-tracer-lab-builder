@@ -548,6 +548,10 @@ def build_topology(spec, configs, pcs, which="answer"):
             ptbuild.insert_cards(t.root, t.devices[d["name"]], [(library_dir() / "devices" / cards[c]["file"], bay)
                                                                 for c, bay, _ in plan], t.macs)
             t.extra_ports[d["name"]] = [n for _, _, names in plan for n in names]
+        w = d.get("wireless")
+        if w and (which == "answer" or w.get("in_start")):   # the WLAN a home router offers, or a host joins
+            ptbuild.set_wireless(t.devices[d["name"]], w["ssid"], w.get("security", "open"), w.get("passphrase", ""),
+                                 pcs_for(spec, which).get(d["name"]))
         if d.get("connect"):   # a Cloud's cable/DSL mapping: [["Coaxial7", "Ethernet6"], ["Modem4", ...]]
             ptbuild.cloud_connections(t.devices[d["name"]], [tuple(p) for p in d["connect"]])
     cidr = {(r[0], long_if(r[1])): r[2] for r in addressing_rows(spec)}
@@ -670,7 +674,7 @@ UDP_SERVICE_PORTS = {53: "DNS", 67: "DHCP", 68: "DHCP", 69: "TFTP", 123: "NTP", 
 CONNECTIVITY_STATEMENTS = ("ping", "ping6", "tcp", *TCP_PORTS, "udp")
 GRADE_STATEMENTS = ("ip", "ip6", "up", "gw", "gw6", "hostname", "line", "in", "dhcp", "vlan", "access", "trunk",
                     "route", "route6", "ospf", "rid", "passive", "stp", "portfast", "portsec", "desc", "banner",
-                    "nat", "acl", "hsrp", "pool", "secret", "user", "clock", "nameif", "seclevel", "object",
+                    "nat", "acl", "hsrp", "pool", "secret", "user", "clock", "nameif", "seclevel", "object", "wlan",
                     *CONNECTIVITY_STATEMENTS, "cable")
 # the rates IOS (and Packet Tracer) accept for `clock rate` on a DCE serial interface
 CLOCK_RATES = (1200, 2400, 4800, 9600, 19200, 38400, 56000, 64000, 72000, 125000, 128000, 148000, 250000, 500000,
@@ -862,6 +866,8 @@ def default_hint(w, item):
         return f"Compare {dev} {port}'s IPv6 address and prefix length with the addressing table (show ipv6 interface brief / ipv6config)."
     if kind == "gw6":
         return f"Check {dev}'s IPv6 default gateway (ipv6config): usually its router's link-local or global address."
+    if kind and kind.startswith("wlan_"):
+        return f"Check {dev}'s wireless settings: network name (SSID), security mode and passphrase."
     if kind in ("nameif", "seclevel"):
         return f"Check how {dev} {port} is named and trusted: show nameif / show running-config interface."
     if kind in ("asa_obj_addr", "asa_obj_nat"):
@@ -1006,6 +1012,18 @@ def _statement(st, w, k, items, checks, spec):
             _line_item(items, checks, dev, parent, f"standby {grp} priority {int(w[w.index('priority') + 1])}")
         if "preempt" in w:
             _line_item(items, checks, dev, parent, f"standby {grp} preempt")
+    elif k == "wlan":                   # wlan DEV SSID [wpa2 PASSPHRASE]
+        dev, ssid = w[1], w[2]
+        model = next((d["model"] for d in spec["device"] if d["name"] == dev), "")
+        radio = "Wireless 2.4G" if model in ("home-router", "wrt300n") else "Wireless"
+        secure = len(w) > 3 and w[3] == "wpa2"
+        items.append({"device": dev, "kind": "wlan_ssid", "radio": radio, "value": ssid})
+        items.append({"device": dev, "kind": "wlan_auth", "radio": radio, "value": "4" if secure else "0"})
+        if secure:
+            items.append({"device": dev, "kind": "wlan_enc", "radio": radio, "value": "4"})
+            items.append({"device": dev, "kind": "wlan_key", "radio": radio, "value": w[4]})
+        checks.append({"device": dev, "desc": f"{dev} WLAN {ssid}" + (" (WPA2-PSK)" if secure else " (open)"),
+                       "wlan": (ssid, "4" if secure else "0", w[4] if secure else None)})
     elif k == "nameif":                 # nameif ASA IFACE NAME
         dev, iface = w[1], long_if(w[2])
         items.append({"device": dev, "kind": "nameif", "port": iface, "value": w[3]})

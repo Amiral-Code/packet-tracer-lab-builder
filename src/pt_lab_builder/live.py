@@ -15,6 +15,7 @@ Packet Tracer facts this relies on (Packet Tracer 9.0, observed 2026-11-24):
   in the current mode) and returns [status, output] (0 = ok).
 """
 import base64
+import copy
 import json
 import xml.etree.ElementTree as ET
 
@@ -28,7 +29,7 @@ CONNECT = {"eStraightThrough": 8100, "eCrossOver": 8101, "eFiber": 8103, "eSingl
 
 SCRIPT = r"""
 var PLAN = __PLAN__;
-var RES = {stage: "started", errors: [], commands: 0, rejected: [], links: [], hosts: [], notes: []};
+var RES = {stage: "started", errors: [], commands: 0, rejected: [], links: [], hosts: [], notes: [], mode: PLAN.mode || "solve"};
 function out() { ipc.systemFileManager().writePlainTextToFile(PLAN.result, JSON.stringify(RES)); }
 function score(f) { return {correct: f.getCorrectAssessmentItemsCount(), total: f.getAssessmentItemsCount(),
                             percent: f.getPercentageComplete()}; }
@@ -51,6 +52,26 @@ function solve() {
             var dev = net.getDevice(name);
             if (!dev) { RES.errors.push("no device " + name); continue; }
             typeConfig(name, dev, PLAN.configs[name]);
+        }
+        RES.stage = "wireless";
+        for (var wn in PLAN.wireless) {
+            var wd = net.getDevice(wn), ws = PLAN.wireless[wn];
+            try {
+                if (ws.role === "server") {
+                    var srv = wd.getProcess("WirelessServer");
+                    srv.setSsid(ws.ssid); srv.setAuthenType(ws.auth); srv.setEncryptType(ws.enc);
+                    if (ws.key) srv.getWpaProcess().setKey(ws.key);   // WPA keys live in the WPA process, not WEP
+                } else {
+                    // the client's own settings, like the router's (setCurrentProfileStringIPs overran an internal
+                    // list with the arguments tried); its address comes from the host settings below
+                    var cli = wd.getProcess("WirelessClient");
+                    cli.setSsid(ws.ssid); cli.setAuthenType(ws.auth); cli.setEncryptType(ws.enc);
+                    if (ws.key) cli.getWpaProcess().setKey(ws.key);
+                    cli.resetAllAssociations();          // re-scan with the new settings
+                    RES.notes.push(wn + ": a wireless client's network profile cannot be set through Packet Tracer 9's " +
+                                   "API, so it may not join; prove its connectivity with --answer");
+                }
+            } catch (e) { RES.errors.push("wireless " + wn + ": " + e); }
         }
         RES.stage = "hosts";
         setHosts(false);
@@ -194,7 +215,15 @@ def plan(spec, result_path, save_path=None):
     if labgen.needs_convergence(spec):            # OSPF adjacencies, spanning tree on re-configured ports
         settle = max(settle, 90_000)
     dhcp_ms = 45_000 if any(h["dhcp"] for h in hosts.values()) else 0
-    return {"links": links, "configs": configs, "hosts": hosts, "boot_ms": 15_000, "settle_ms": max(settle, 20_000),
+    wireless = {}
+    for d in spec["device"]:
+        w = d.get("wireless")
+        if w and not w.get("in_start"):
+            secure = w.get("security", "open") != "open"
+            wireless[d["name"]] = {"role": "server" if d["model"] in ("home-router", "wrt300n") else "client",
+                                   "ssid": w["ssid"], "auth": 4 if secure else 0, "enc": 4 if secure else 0,
+                                   "key": w.get("passphrase", "") if secure else ""}
+    return {"links": links, "configs": configs, "hosts": hosts, "wireless": wireless, "boot_ms": 15_000, "settle_ms": max(settle, 20_000),
             "dhcp_ms": dhcp_ms,
             "tests_ms": 25_000, "result": str(result_path), "save": str(save_path) if save_path else ""}
 
@@ -241,13 +270,25 @@ def undo_faults(spec):
     return out
 
 
-def instrument(spec, built, out_pka, result_path, save_path=None):
-    """A copy of `built` whose File Script Module solves and grades the lab (see the module docstring)."""
+def instrument(spec, built, out_pka, result_path, save_path=None, answer=False):
+    """A copy of `built` whose File Script Module solves and grades the lab (see the module docstring).
+    answer=True: the student's network is replaced by a copy of the answer network and nothing is typed, so Packet
+    Tracer runs the lab's own solution live: it must reach full marks and pass every connectivity test. This proves
+    the design (e.g. a layer-2 loop that stalls the simulation) and covers what the API cannot do, such as joining a
+    wireless client to a WLAN (its profile calls fail in Packet Tracer 9)."""
     tree = ptlab.read_pkt(built)
     sm = tree.getroot().find("SCRIPT_MODULE")
     if sm is None:
         raise ValueError(f"{built} has no script module")
-    script = SCRIPT.replace("__PLAN__", json.dumps(plan(spec, result_path, save_path)))
+    p = plan(spec, result_path, save_path)
+    if answer:
+        root = tree.getroot()
+        nets = root.findall("PACKETTRACER5")
+        at = list(root).index(nets[0])
+        root.remove(nets[0])
+        root.insert(at, copy.deepcopy(nets[-1]))
+        p.update({"links": [], "configs": {}, "hosts": {}, "wireless": {}, "dhcp_ms": 0, "mode": "answer"})
+    script = SCRIPT.replace("__PLAN__", json.dumps(p))
     s = ET.SubElement(sm.find("SCRIPTS"), "SCRIPT")
     ET.SubElement(s, "ID").text = "LiveCheck.js"
     ET.SubElement(s, "CONTENT").text = base64.b64encode(script.encode()).decode()
@@ -270,7 +311,7 @@ def report(spec, result_path):
     if tests and tests.get("correct") != tests.get("total"):
         ok = False
         lines += [f"  test {i + 1}: {r}" for i, r in enumerate(tests.get("results", []))]
-    if before and before.get("total") and before.get("correct") == before.get("total"):
+    if res.get("mode") != "answer" and before and before.get("total") and before.get("correct") == before.get("total"):
         ok = False
         lines.append("  the start state already scores full marks")
     for dev, cmd, status, output in res.get("rejected", []):

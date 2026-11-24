@@ -219,6 +219,23 @@ def cables(tree):
 def run_check(c, devs, links=None):
     if "any" in c:  # several valid ways to do it: one of the sub-checks must pass
         return any(run_check({"device": c["device"], **sub}, devs, links) for sub in c["any"])
+    if "wlan" in c:   # the WLAN a device offers (first wireless server) or has joined (wireless client)
+        d = devs.get(c["device"])
+        if d is None:
+            return False
+        eng = d.find("ENGINE")
+        common = None
+        if eng.find("WIRELESS_SERVERS") is not None and len(eng.find("WIRELESS_SERVERS")):
+            common = eng.find("WIRELESS_SERVERS")[0].find("WIRELESS_COMMON")
+        elif d.findtext("ENGINE/TYPE") in ("WirelessRouter", "AccessPoint") and eng.find("WIRELESS_SERVER") is not None:
+            common = eng.find("WIRELESS_SERVER/WIRELESS_COMMON")
+        elif eng.find("WIRELESS_CLIENT") is not None:
+            common = eng.find("WIRELESS_CLIENT/WIRELESS_COMMON")
+        if common is None:
+            return False
+        ssid, auth, key = c["wlan"]
+        return (common.findtext("SSID") == ssid and common.findtext("AUTHEN_TYPE") == auth
+                and (key is None or common.findtext("WEP_PROCESS/KEY") == key))
     if "cable" in c:  # a cable between exactly these two ports, of the expected type when one is given
         (a, pa, b, pb), want = c["cable"], c.get("cable_type")
         got = (links or {}).get(frozenset({(a, pa), (b, pb)}), False)
@@ -385,6 +402,11 @@ PKA_KINDS = {
     "seclevel": (["Ports", "{port}"], "Security Level", "Security Level", "8", "Other"),
     "asa_obj_addr": (["Asa Object List", "{obj}"], "Address", "Address", "8", "Other"),       # " subnet A M"
     "asa_obj_nat": (["Asa Object List", "{obj}"], "Nat", "Nat", "8", "Other"),               # " nat (in,out) ..."
+    # wireless, as in Packet Tracer's own tree: a home router's 2.4 GHz WLAN ("Wireless 2.4G") or a host ("Wireless")
+    "wlan_ssid": (["{radio}"], "SSID", "SSID", "8", "Other"),
+    "wlan_auth": (["{radio}", "Security Mode"], "Authen Type", "Authen Type", "8", "Other"),       # 0 open, 4 WPA2-PSK
+    "wlan_enc": (["{radio}", "Security Mode"], "Encryption Type", "Encryption Type", "8", "Other"),  # 4 AES
+    "wlan_key": (["{radio}", "Security Mode"], "Pass Phrase", "PassPhrase", "8", "Other"),   # display, node ID
     "pool_start": (["DHCP Server", "Pools", "{pool}"], "Start IP address", "Start IP address", "0", "Ip"),
     "pool_mask": (["DHCP Server", "Pools", "{pool}"], "Subnet mask", "Subnet mask", "0", "Ip"),
     "pool_gw": (["DHCP Server", "Pools", "{pool}"], "Default Gateway", "Default Gateway", "0", "Ip"),

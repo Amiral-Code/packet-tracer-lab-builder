@@ -372,3 +372,23 @@ What the live check found that no file-level check could:
   student did anything; fitted cards now start with `POWER` false and `no ip address` / `shutdown` in the factory
   configuration (start 0/8 instead of 1/8).
 
+## Iteration 3: wireless (2026-11-24)
+
+- XML: a home router's 2.4 GHz WLAN is the first `WIRELESS_SERVERS/WIRELESS_SERVER` (`_cwsp_rng_tid`), mirrored in
+  `ENGINE/WIRELESS_SERVER`; `WIRELESS_COMMON` holds `SSID`, `AUTHEN_TYPE`, `ENCRYPT_TYPE` and, for WPA,
+  `WEP_PROCESS/KEY` (the passphrase). A wireless host has `WIRELESS_CLIENT` with the same common block, `PROFILES`
+  and `CURRENT_PROFILE/WIRELESS_PROFILE` (SSID, AUTHEN_TYPE, ENCRYPT_TYPE, WEP_KEY, DHCP_ENABLED, IP_ADDRESS, ...).
+  The API reference gives the enums: authen 0 null, 1 WEP, 2 WPA-PSK, 3 WPA-EAP, 4 WPA2-PSK, 5 WPA2-EAP, 6 open;
+  encrypt 0 none, 1/2 WEP 64/128, 3 TKIP, 4 AES; network type 7 mixed.
+- Packet Tracer's tree (bare copy): `DEV > Wireless 2.4G > SSID`, `> Security Mode > Authen Type / PassPhrase (shown
+  "Pass Phrase") / Encryption Type` on a home router; `DEV > Wireless > ...` on a host. Written as above, all eight
+  items were kept with values identical to Packet Tracer's own.
+- A wireless host's address comes from its joined profile: the laptop template's "Default" profile (from a
+  wireless sample) had DHCP off and a static 10.1.1.3/8, so the answer laptop joined but could not reach the LAN.
+  Host templates' profiles are now reset to DHCP; a joined profile takes the host's addressing.
+- API: `getProcess("WirelessServer")` / `("WirelessClient")` with `setSsid`, `setAuthenType`, `setEncryptType`;
+  the WPA passphrase is `getWpaProcess().setKey()` (`getWepProcess()` does not hold it). `WirelessClientProcess`
+  `setCurrentProfileStringIPs`, `setCurrentProfile` and `addProfile` all throw `vector::_M_range_check: __n (which is
+  14) >= this->size() (which is 14)` whatever the arguments, so a script cannot join a client in Packet Tracer 9;
+  the answer-network live check proves wireless connectivity instead (8/8, ping 1/1).
+

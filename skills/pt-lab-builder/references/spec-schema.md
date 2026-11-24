@@ -38,6 +38,13 @@ maps its provider ports with `connect = [["Coaxial7", "Ethernet6"]]` (cable) or 
 (DSL). Coax and phone links are chosen automatically. Port names containing a space are written as Packet
 Tracer shows them, quoted in grade statements: `cable MODEM "Port 0" ISP-CLOUD Coaxial7`.
 
+Wireless: `wireless = { ssid = "AtlasHome", security = "wpa2-psk", passphrase = "..." }` on a `home-router` or
+`wrt300n` configures its 2.4 GHz WLAN; on a `laptop` (or another wireless host) the network it joins, with the
+host's addressing from the table (`["LAPTOP", "Wireless0", "dhcp", ""]`). Written to the answer network; add
+`in_start = true` to also start that way. Grade with `wlan DEV SSID [wpa2 PASSPHRASE]` (Packet Tracer's `Wireless
+2.4G` / `Wireless` nodes: SSID, Authen Type 4 = WPA2-PSK, Encryption Type 4 = AES, Pass Phrase) and a ping from
+the wireless host. Live-check wireless labs with `--answer`: Packet Tracer 9's API cannot join a client.
+
 Interface cards: `modules = ["HWIC-2T"]` on a router fits cards into its empty slots, in slot order (copies of
 real cards from the user's files; `ptlab init` lists each card and the chassis it was seen in, the only ones it may
 go into). Ports are named by bay: 1841/1941/2911 HWIC slot n gives `Serial0/n/x`, ISR4321/4331 NIM bay n gives

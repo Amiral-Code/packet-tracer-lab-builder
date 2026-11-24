@@ -235,6 +235,69 @@ def insert_cards(root, device, cards, used_macs=None):
         slot.append(card)
 
 
+# security -> (AUTHEN_TYPE, ENCRYPT_TYPE) as Packet Tracer stores them (a WPA2-Personal network in the user's files:
+# 4/4 with the passphrase in WEP_PROCESS/KEY; WPA2-Enterprise with a RADIUS server is 5)
+WIRELESS_SECURITY = {"open": ("0", "0"), "wpa2-psk": ("4", "4")}
+
+
+def _wireless_common(common, ssid, security, passphrase):
+    auth, enc = WIRELESS_SECURITY[security]
+    common.find("SSID").text = ssid
+    common.find("AUTHEN_TYPE").text = auth
+    common.find("ENCRYPT_TYPE").text = enc
+    wep = common.find("WEP_PROCESS")
+    if security == "open":
+        if wep is not None:
+            common.remove(wep)
+        return
+    if wep is None:                       # placed before STANDARD_CHANNEL5G, as in the user's files
+        wep = ET.Element("WEP_PROCESS")
+        kids = list(common)
+        at = next((i for i, c in enumerate(kids) if c.tag == "STANDARD_CHANNEL5G"), len(kids))
+        common.insert(at, wep)
+    for tag in ("KEY", "USERID", "PASSWORD", "ENCRYPTION"):
+        if wep.find(tag) is None:
+            ET.SubElement(wep, tag)
+    wep.find("KEY").text = passphrase
+    wep.find("ENCRYPTION").text = enc
+
+
+def set_wireless(device, ssid, security="open", passphrase="", addressing=None):
+    """A WLAN on a home router / Linksys (its 2.4 GHz network), or the network a wireless host joins. A host's joined
+    profile carries its addressing ({"dhcp": True} or ip/mask/gw); Packet Tracer takes a wireless host's address
+    from that profile."""
+    eng = device.find("ENGINE")
+    servers = ([eng.find("WIRELESS_SERVERS")[0]] if eng.find("WIRELESS_SERVERS") is not None
+               and len(eng.find("WIRELESS_SERVERS")) else [])
+    if eng.find("WIRELESS_SERVER") is not None:
+        servers.append(eng.find("WIRELESS_SERVER"))
+    if servers and device.findtext("ENGINE/TYPE") in ("WirelessRouter", "WirelessRouterNewGeneration", "AccessPoint"):
+        for srv in servers:
+            _wireless_common(srv.find("WIRELESS_COMMON"), ssid, security, passphrase)
+        return
+    client = eng.find("WIRELESS_CLIENT")
+    if client is None:
+        raise ValueError(f"{device.findtext('ENGINE/NAME')} has no wireless client")
+    _wireless_common(client.find("WIRELESS_COMMON"), ssid, security, passphrase)
+    auth, enc = WIRELESS_SECURITY[security]
+    default = client.find("PROFILES/WIRELESS_PROFILE")
+    profile = copy.deepcopy(default)
+    a = addressing or {"dhcp": True}
+    for tag, value in (("NAME", ssid), ("SSID", ssid), ("AUTHEN_TYPE", auth), ("ENCRYPT_TYPE", enc),
+                       ("WEP_KEY", passphrase if security != "open" else ""),
+                       ("DHCP_ENABLED", "1" if a.get("dhcp") else "0"),
+                       ("IP_ADDRESS", "" if a.get("dhcp") else a.get("ip", "")),
+                       ("SUBNET_MASK", "" if a.get("dhcp") else a.get("mask", "")),
+                       ("DEFAULT_GATEWAY", "" if a.get("dhcp") else a.get("gw", ""))):
+        if profile.find(tag) is not None:
+            profile.find(tag).text = value
+    client.find("PROFILES").insert(0, profile)
+    current = client.find("CURRENT_PROFILE")
+    for c in list(current):
+        current.remove(c)
+    current.append(copy.deepcopy(profile))
+
+
 def cloud_connections(device, pairs):
     """A Cloud's cable/DSL mapping, as Packet Tracer stores it: MODEM_CONNECTIONS pairs a coax or modem (phone) port
     with an Ethernet port; MODEM_CONNECTION_TYPES marks that Ethernet port as DSL (true) or cable (false)."""

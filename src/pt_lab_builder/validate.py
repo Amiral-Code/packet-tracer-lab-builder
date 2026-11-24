@@ -417,6 +417,16 @@ def lint(spec) -> Issues:
     return issues
 
 
+def _wlan_problem(w, model):
+    if len(w) not in (3, 5) or (len(w) == 5 and w[3] != "wpa2"):
+        return "write it as: wlan DEV SSID [wpa2 PASSPHRASE]"
+    if len(w) == 5 and not 8 <= len(w[4]) <= 63:
+        return "a WPA2 passphrase is 8 to 63 characters"
+    if model.get(w[1]) not in ("home-router", "wrt300n", "laptop", "pc", "tablet", "smartphone"):
+        return f"{w[1]} ({model.get(w[1])}) has no WLAN to grade (home router, Linksys or a wireless host)"
+    return None
+
+
 def _statement_problem(w, st, model, ports, first_addr, first_addr6=()):
     """Shape errors for one grade statement, or None."""
     k = w[0]
@@ -426,6 +436,8 @@ def _statement_problem(w, st, model, ports, first_addr, first_addr6=()):
     if k in need and len(w) != need[k]:
         return f"expects {need[k] - 1} fields after '{k}'"
     host = labgen.ptbuild_model_is_host(model.get(w[1], ""))
+    if k == "wlan":
+        return _wlan_problem(w, model)
     ios_only = ("route", "route6", "ospf", "rid", "passive", "stp", "portfast", "portsec", "nat", "acl", "hsrp",
                 "pool", "secret", "user", "banner", "desc", "vlan", "access", "trunk", "line", "in", "hostname",
                 "clock")

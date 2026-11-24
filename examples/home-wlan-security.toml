@@ -1,0 +1,81 @@
+[lab]
+id = "home-wlan-security"
+title = "Lock the Home Wi-Fi: WPA2 on a Home Router"
+level = 1
+kind = "configure"
+exam = "CCNA 1.11 / 5.9 - wireless principles, WLAN configuration with WPA2 PSK"
+time = 20
+scenario = """
+A family's new home router is still broadcasting its factory network: an open WLAN called "Default" that any
+neighbour can join. Replace it with a named network protected by WPA2-Personal, then reconnect the family laptop
+so it still reaches the file server on the wired LAN.
+"""
+objectives = [
+  "Name a WLAN (SSID) and secure it with WPA2-Personal (AES) on a home router",
+  "Connect a wireless client to a WPA2-PSK network",
+  "Verify that wireless and wired hosts share the LAN",
+]
+
+[[device]]
+name = "HOME-RTR"
+model = "home-router"
+x = 400
+y = 160
+wireless = { ssid = "AtlasHome", security = "wpa2-psk", passphrase = "Str0ngPass99" }
+[[device]]
+name = "LAPTOP"
+model = "laptop"
+x = 220
+y = 320
+wireless = { ssid = "AtlasHome", security = "wpa2-psk", passphrase = "Str0ngPass99" }
+[[device]]
+name = "NAS"
+model = "server"
+x = 580
+y = 320
+
+[[link]]
+a = "HOME-RTR GigabitEthernet 1"
+b = "NAS Fa0"
+
+[addressing]
+rows = [
+  ["LAPTOP", "Wireless0", "dhcp",             ""],
+  ["NAS",    "Fa0",       "192.168.0.10/24",  "192.168.0.1"],
+]
+
+[[part]]
+title = "Secure the WLAN"
+intro = "HOME-RTR > GUI > Wireless: the 2.4 GHz network is the one the laptop uses."
+steps = [
+  "Change the 2.4 GHz **Network Name (SSID)** from Default to **AtlasHome**.",
+  "Under Wireless Security, choose **WPA2 Personal** with **AES** and passphrase **Str0ngPass99**. Save the settings.",
+]
+hint = "WPA2 Personal is the pre-shared-key mode: every device that knows the passphrase may join."
+why = "An open WLAN lets anyone nearby use the connection and read unencrypted traffic."
+
+[[part]]
+title = "Reconnect the laptop"
+intro = "The laptop lost the network when its name and security changed."
+steps = [
+  "LAPTOP > Desktop > PC Wireless (or Config > Wireless0): join **AtlasHome** with WPA2-Personal and the passphrase; keep DHCP.",
+  "Check: the laptop gets a 192.168.0.x address and pings the NAS at 192.168.0.10.",
+]
+hint = "Security mode and passphrase must match the router exactly; the SSID is case-sensitive."
+
+[grade]
+items = [
+  "wlan HOME-RTR AtlasHome wpa2 Str0ngPass99",
+  "wlan LAPTOP AtlasHome wpa2 Str0ngPass99",
+  "ping LAPTOP NAS",
+]
+
+debrief = """
+A home router is a router, a switch and an access point in one box: the laptop and the NAS are in the same LAN
+(192.168.0.0/24) although one is wireless and one is wired. WPA2-Personal protects the radio link with a key
+derived from the passphrase; anyone with the passphrase can join, which is why businesses use WPA2-Enterprise.
+"""
+questions = [
+  "Why did the laptop lose its connection when only the router's settings changed?",
+  "What would a business use instead of a shared passphrase, and why?",
+]

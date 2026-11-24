@@ -224,6 +224,12 @@ def factory_reset(device, kind):
             p.find("PORT_DHCP_ENABLE").text = "false"
     if eng.find("GATEWAY") is not None:
         eng.find("GATEWAY").text = ""
+    for prof in device.iter("WIRELESS_PROFILE"):     # a sample's wireless profile may carry a static address
+        for tag in ("IP_ADDRESS", "SUBNET_MASK", "DEFAULT_GATEWAY", "DNS"):
+            if prof.find(tag) is not None:
+                prof.find(tag).text = ""
+        if prof.find("DHCP_ENABLED") is not None:
+            prof.find("DHCP_ENABLED").text = "1"
     for tag in ("MODEM_CONNECTION_TYPES", "MODEM_CONNECTIONS", "PHONE_CONNECTIONS", "CONNECTIONS"):
         if eng.find(tag) is not None:            # a Cloud's mappings from its source file
             for c in list(eng.find(tag)):

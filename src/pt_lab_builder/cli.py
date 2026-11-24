@@ -67,6 +67,8 @@ def parser() -> argparse.ArgumentParser:
     lp.add_argument("output", type=Path)
     lp.add_argument("result", type=Path, help="where the script writes its JSON report (absolute path)")
     lp.add_argument("--save", type=Path, help="also save the solved network here (absolute path)")
+    lp.add_argument("--answer", action="store_true", help="run the answer network itself live instead of solving "
+                                                           "the student's (proves the design; covers wireless clients)")
     lr = sub.add_parser("live-report", help="verdict from a live-prepare script's JSON report")
     lr.add_argument("spec", type=Path)
     lr.add_argument("result", type=Path)
@@ -112,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
         from . import live
         spec = labgen.load_spec(str(args.spec))
         live.instrument(spec, str(args.built), str(args.output), args.result.resolve(),
-                        args.save.resolve() if args.save else None)
+                        args.save.resolve() if args.save else None, answer=args.answer)
         print(f"wrote {args.output}")
         return 0
     if args.command == "live-report":

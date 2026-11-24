@@ -109,7 +109,12 @@ Live-confirmed 2026-11-23 (`feature-probe-2.pka`, Check Results **40/40**, Conne
 - ~~**ASA labs**~~ `asa-5506x`/`asa-5505`, ASA CLI configs, native items (`nameif`, `seclevel`, `object`, `acl`,
   `ip`, `up`), automatic answer convergence, `inspect http` lint; `examples/asa-edge-firewall.toml` proven by round
   trip; the same lab live-confirmed as a probe (14/14, 2/2).
-- Wireless labs: WLC-based WLANs and range in the Physical view.
+- ~~**Wireless (home router / Linksys WLANs, wireless hosts)**~~ `wireless = {...}`, `wlan` statement on Packet
+  Tracer's own nodes; `examples/home-wlan-security.toml` proven by round trip (8/8 values) and the answer-network
+  live check (8/8, ping 1/1). Still open: WLC-based WLANs (the user's files grade them: WLANs, RADIUS, dynamic
+  interfaces) and range in the Physical view.
+- ~~**Live check of the answer network**~~ `live-prepare --answer` runs the lab's own solution live: it proves the
+  design under Packet Tracer's simulation and covers what the API cannot do.
 
 ## Iteration 4: every student gets a different lab
 
