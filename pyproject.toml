@@ -33,5 +33,8 @@ ptlab = "pt_lab_builder.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/pt_lab_builder"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"examples" = "pt_lab_builder/recipes"
+
 [tool.hatch.build.targets.sdist]
 include = ["src", "skills", "examples", "tests", "README.md", "LICENSE", "NOTICE", "CMakeLists.txt", "pyproject.toml"]

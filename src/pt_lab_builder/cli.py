@@ -76,6 +76,17 @@ def parser() -> argparse.ArgumentParser:
     va.add_argument("--seed", default="ptlab", help="same seed, same variants")
     va.add_argument("--output-dir", type=Path, required=True)
     va.add_argument("--build", action="store_true")
+    sub.add_parser("recipes", help="list the proven topic recipes a new lab can start from")
+    nw = sub.add_parser("new", help="start a lab from a recipe: a fresh copy with new addressing, ready to edit")
+    nw.add_argument("recipe")
+    nw.add_argument("output", type=Path, help="the new spec (.toml); its name becomes the lab id")
+    nw.add_argument("--seed", default="new")
+    ts = sub.add_parser("troubleshoot", help="turn a configure lab into a troubleshooting lab: faults drawn from its "
+                                             "own answer configuration, each caught by a graded item")
+    ts.add_argument("spec", type=Path)
+    ts.add_argument("output", type=Path)
+    ts.add_argument("--faults", type=int, default=3)
+    ts.add_argument("--seed", default="faults")
     gr = sub.add_parser("grade", help="grade every saved .pka in a folder into grades.csv and grades.html")
     gr.add_argument("spec", type=Path, help="the lab spec, or a folder of its variant specs")
     gr.add_argument("folder", type=Path, help="folder of saved student .pka files")
@@ -155,6 +166,30 @@ def main(argv: list[str] | None = None) -> int:
             for path in made:
                 labgen.build(str(path), False, out)
         return 0
+    if args.command == "recipes":
+        from . import recipes
+        for name, (ex, topics, level, kind, minutes, what) in recipes.RECIPES.items():
+            print(f"{name:22} L{level} {kind:12} {minutes:3} min  {topics}\n{'':22} {what}")
+        return 0
+    if args.command == "new":
+        from . import recipes
+        if args.recipe not in recipes.RECIPES:
+            raise SystemExit(f"unknown recipe {args.recipe!r}: see `ptlab recipes`")
+        if args.output.exists():
+            raise SystemExit(f"{args.output} exists; choose another name")
+        path = recipes.new(args.recipe, args.output, args.seed)
+        print(f"wrote {path}: edit it, then `ptlab lint {path}` and `ptlab build {path}`")
+        return 0
+    if args.command == "troubleshoot":
+        from . import troubleshoot
+        if args.output.exists():
+            raise SystemExit(f"{args.output} exists; choose another name")
+        text, chosen = troubleshoot.make(args.spec.read_text(encoding="utf-8"), args.output.stem, args.faults, args.seed)
+        args.output.write_text(text, encoding="utf-8")
+        for f in chosen:
+            print(f"fault on {f['device']}: {f['symptom']}")
+        print(f"wrote {args.output} with {len(chosen)} fault(s); check it with `ptlab lint {args.output}`")
+        return 0 if chosen else 1
     if args.command == "grade":
         from . import grading
         rows = grading.grade_dir(args.spec, args.folder)

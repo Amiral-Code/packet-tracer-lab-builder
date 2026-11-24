@@ -42,5 +42,27 @@ class LivePlanTests(unittest.TestCase):
         self.assertGreaterEqual(self.plan["settle_ms"], 20_000)
 
 
+class FaultLibraryTests(unittest.TestCase):
+    def test_candidates_come_from_the_answer_configuration(self):
+        from pt_lab_builder import troubleshoot
+        spec = {"device": [{"name": "R1", "model": "router-2911"}],
+                "addressing": {"rows": [["PC1", "Fa0", "192.168.1.10/24", "192.168.1.1"]]},
+                "config": {"answer": {"R1": "interface G0/0\n ip address 192.168.1.1 255.255.255.0\n no shutdown\n"
+                                            "ip route 0.0.0.0 0.0.0.0 10.0.0.1\nrouter ospf 1\n network 10.0.0.0 0.0.0.3 area 0\n"}}}
+        kinds = {("apply" in f, f.get("replace", "")[:12], tuple(f.get("pc", {}).items())) for f in troubleshoot.candidates(spec)}
+        self.assertIn((True, "", ()), kinds)                                   # interface shut down
+        self.assertIn((False, "ip route 0.0", ()), kinds)                      # wrong next hop
+        self.assertIn((False, " network 10.", ()), kinds)                      # wrong OSPF area
+        self.assertIn((False, " ip address ", ()), kinds)                      # mistyped address
+        self.assertIn((False, "", (("gw", "192.168.1.2"),)), kinds)            # host gateway
+
+    def test_fault_blocks_are_valid_toml(self):
+        import tomllib
+        from pt_lab_builder import troubleshoot
+        block = troubleshoot._fault_toml({"device": "R1", "find": ' ip address "x"', "replace": " y",
+                                          "symptom": "s", "explain": "e"})
+        self.assertEqual(tomllib.loads(block)["fault"][0]["find"], ' ip address "x"')
+
+
 if __name__ == "__main__":
     unittest.main()

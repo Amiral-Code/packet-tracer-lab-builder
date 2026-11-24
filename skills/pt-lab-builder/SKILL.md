@@ -16,6 +16,12 @@ Packet Tracer covers CCNA and part of ENCOR. Use another platform for MPLS, VRFs
 
 Write original scenarios, instructions, topologies, and faults. Do not copy NetAcad, Cisco, or third-party course activity content.
 
+Start from a proven recipe when one fits the topic: `ptlab recipes` lists them (topic, level, kind, time) and
+`ptlab new RECIPE work/NAME.toml` writes a fresh copy with new addressing to adapt. `ptlab troubleshoot SPEC OUT
+--faults 3` turns a configure lab into a troubleshooting lab with faults drawn from its own answer configuration,
+each caught by a graded item. For a class, `ptlab variants SPEC --count N --output-dir DIR --build` gives every
+student a re-addressed copy, and `ptlab grade DIR-or-SPEC SUBMISSIONS/` writes grades.csv and grades.html.
+
 For the TOML structure, grading statements, device/link rules, and known serialization invariants, read [references/spec-schema.md](references/spec-schema.md). When the request includes a Physical workspace or physical cabling, also read [references/physical-mode.md](references/physical-mode.md).
 
 Grade with the most specific statement (`access`, `trunk`, `vlan`, `route`, `ospf`, `stp`, `ip`, `up`, `gw`, and

@@ -130,10 +130,13 @@ Live-confirmed 2026-11-23 (`feature-probe-2.pka`, Check Results **40/40**, Conne
 
 - ~~**`ptlab grade SPEC DIR`**~~ batch grading of saved student files into grades.csv and grades.html (per student,
   per check); with a folder of variant specs each file is graded against the variant it matches.
-- Topic recipes the skill composes: VLAN + router-on-a-stick, inter-VLAN on L3 switch, OSPF single/multi-area,
-  EtherChannel, STP tuning, HSRP, DHCP + relay, ACL policy, NAT/PAT, IPv6 dual-stack, port security, SSH hardening,
-  wireless. Each recipe brings its config, faults, grade statements and connectivity tests.
-- A troubleshooting fault library: realistic faults per recipe, each with symptom, evidence and explanation.
+- ~~**Topic recipes**~~ `ptlab recipes` / `ptlab new RECIPE OUT`: the twelve proven examples (cabling, SOHO cable and
+  WLAN, static, ACL/VLAN/OSPF, serial OSPF, cards, fiber, ASA, dual stack and hardening, troubleshooting, capstone)
+  shipped in the wheel; a new lab is a fresh re-addressed copy. Open: router-on-a-stick, EtherChannel-only, STP
+  tuning and SSH-only recipes as separate small labs (they exist inside the capstone today).
+- ~~**Fault library**~~ `ptlab troubleshoot SPEC OUT --faults N`: faults drawn from the lab's own answer configuration
+  (shut interface, wrong next hop, wrong OSPF area, mistyped address, wrong access VLAN, ACL direction, missing NAT
+  inside, wrong host gateway), each with symptom and explanation, kept only when a graded item catches it.
 - Skill: ask only level/track/kind/topic/time, pick recipes, build, lint, and report the live checks still pending.
 
 ## Iteration 6: partial credit and better feedback
