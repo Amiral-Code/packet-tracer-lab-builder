@@ -43,7 +43,8 @@ Wireless: `wireless = { ssid = "AtlasHome", security = "wpa2-psk", passphrase = 
 host's addressing from the table (`["LAPTOP", "Wireless0", "dhcp", ""]`). Written to the answer network; add
 `in_start = true` to also start that way. Grade with `wlan DEV SSID [wpa2 PASSPHRASE]` (Packet Tracer's `Wireless
 2.4G` / `Wireless` nodes: SSID, Authen Type 4 = WPA2-PSK, Encryption Type 4 = AES, Pass Phrase) and a ping from
-the wireless host. Live-check wireless labs with `--answer`: Packet Tracer 9's API cannot join a client.
+the wireless host. The live check (both modes) covers wireless labs: the client profiles Packet Tracer 9's API cannot
+set are preloaded from the answer in solve mode.
 
 Wireless LAN controller: `wlc-3504` / `wlc-2504` (data port `GigabitEthernet1`, crossover to a switch, chosen
 automatically) with lightweight APs `lap` / `lap-3702i` on DHCP:
@@ -56,7 +57,7 @@ joins the default AP group. The AP needs an address on the management subnet (a 
 SSID [wpa2 PASSPHRASE]` (Packet Tracer's `CAPWAP Wireless > Wireless LANs > SSID` nodes: SSID, Enabled, Authen
 Type, Encryption Type, Pass Phrase, and AP-group membership; the WLAN profile name is its SSID), the client with
 `wlan LAPTOP ...` and a ping. Students configure the WLC in its web GUI from a PC (default login admin / Cisco123).
-Live-check with `--answer`. Example: `wlc-clinic-wlan`.
+The live check preloads the WLC's WLANs in solve mode (its GUI cannot be scripted). Example: `wlc-clinic-wlan`.
 
 Per-part scores: a `[[part]]` may list its own `grade = [...]` statements; Check Results then shows a score per part
 (the part title is the items' component). Statements under parts are added to the lab's grading automatically.

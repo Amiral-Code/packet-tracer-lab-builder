@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1 (2026-11-24)
+
+- Live check, solve mode, now covers wireless labs: settings only a GUI can make (a WLC's WLANs and interfaces, a
+  wireless client's joined profile) are copied from the answer into the start network before Packet Tracer opens
+  it, the simulation clock is started at once, and preloaded clients re-scan after their access point changes.
+  home-wlan-security and wlc-clinic-wlan pass solve mode live (8/8 + ping, 10/10 + ping).
+- Research recorded: Packet Tracer's clock waits for the script to drive it; the WLC GUI is HTTPS with HTTP Basic
+  credentials the API's HTTP client cannot carry; WLC pages and their form fields (from Packet Tracer's resources).
+
 ## 0.3.0 (2026-11-24)
 
 - Structured cabling: copper patch panels and wall mounts (`patch-panel`, `wall-mount`), their jacks and

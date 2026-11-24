@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pt-lab-builder"
-version = "0.3.0"
+version = "0.3.1"
 description = "Build original native Cisco Packet Tracer activities from TOML specifications"
 readme = "README.md"
 requires-python = ">=3.11"

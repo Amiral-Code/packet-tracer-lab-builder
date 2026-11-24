@@ -459,3 +459,32 @@ NetAcad's 1.1.4 and 1.1.6 activities: the Variable Manager holds one IP pool (`V
 are the stock framework (EventManager, Main, ProficiencyModel, ScoringModels, VariableManager), no custom scoring.
 Not implemented: per-student variants and per-part scores cover the same needs.
 
+## Scripting a WLC and wireless clients (2026-11-24)
+
+Sources: Packet Tracer's own API reference (`help/default/IpcAPI`, Doxygen), its binary's strings, and its WLC web
+GUI (`art/html/resources.bin`, a Qt resource file: zstd-compressed pages under `/art/html/wlc/`), plus probes run
+inside Packet Tracer (a File Script Module writing its findings to a file).
+
+- The simulation clock does not advance on its own while a script waits: HTTP requests, an AP's CAPWAP join and
+  console pings stayed pending until `ActivityFile.runConnectivityTests()` was called; after it, the same requests
+  completed (a web page in about 28 s of simulated time).
+- PCs have `HttpClient` and `HttpBackgroundClientManager.createClient()` (methods `go`, `http_get`, `http_post`,
+  event `onDone(content, serverIp, responseType, url)`; responseType 3 = page, 4 = refused/unauthorized, 5 = not
+  found, 8 = no server on that port, 11 = bad URL). Background clients fetch real pages.
+- The WLC's GUI is HTTPS only (HTTP: 8; HTTPS: the "Cisco Systems Login" page). Its pages submit key/values through
+  Packet Tracer's `CHttpFormExtractor` (create: `buttonClicked=4, vap_profileName, vap_ssid, wlan_id`; edit adds
+  `enabled, interface, authen=[WPA2][Auth(PSK)], encryptType=aes, authenKey, ...`) and log in with the native
+  `submitIoeLogin`, which fills the request's `userName`/`password` (HTTP Basic). The API's client cannot carry those
+  credentials (URL user info: 11; header strings or JSON as http_get/http_post arguments: 4), so protected pages
+  answer 4 and posts are accepted (3) but ignored. The WLC's `CapwapAC` and the AP's `CapwapProcess` exist through
+  `getProcess` but expose no methods beyond the generic Process ones. Conclusion: a WLC cannot be configured by script.
+- Wireless client profile calls (`addProfile`, `setCurrentProfile[StringIPs]`) are documented with 15 parameters and
+  fail with `vector::_M_range_check: __n (which is 14) >= this->size() (which is 14)` whatever is passed.
+- Therefore the live check's solve mode preloads exactly these GUI-only settings from the answer network into the
+  start network before Packet Tracer opens it (`CAPWAP_AC`, `WLC_INTERFACES`, `MANAGEMENT_INTERFACE` of a WLC;
+  `WIRELESS_CLIENT` of a wireless host), drives the clock, solves everything else by typing and API calls, and makes
+  preloaded clients re-scan after their access point changes. Results: home-wlan-security 8/8, 1/1 (the router is set
+  through the API, the laptop joins and pings); wlc-clinic-wlan 10/10, 1/1 (the AP joins live, the laptop associates
+  through it, leases and pings). The report marks the start score as "with the GUI-only settings preloaded"; the true
+  start network was scored by a plain run (wlc-clinic-wlan 0/10).
+

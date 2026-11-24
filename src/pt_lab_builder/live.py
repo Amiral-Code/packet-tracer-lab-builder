@@ -41,6 +41,13 @@ function solve() {
         var f = ipc.appWindow().getActiveFile();
         var net = ipc.network();
         RES.before = score(f);
+        // settings only a GUI can make (a WLC's WLANs, a wireless client's profile) were written into this copy
+        // before it opened (see instrument); drive the clock now, or nothing moves until the tests run (observed:
+        // HTTP requests and the AP join stayed pending until runConnectivityTests started the simulation)
+        if (PLAN.preload && PLAN.preload.length) {
+            RES.notes.push("preloaded from the answer (GUI-only settings): " + PLAN.preload.join(", "));
+            f.runConnectivityTests();
+        }
         RES.stage = "cabling";
         var lw = ipc.appWindow().getActiveWorkspace().getLogicalWorkspace();
         for (var i = 0; i < PLAN.links.length; i++) {
@@ -61,17 +68,14 @@ function solve() {
                     var srv = wd.getProcess("WirelessServer");
                     srv.setSsid(ws.ssid); srv.setAuthenType(ws.auth); srv.setEncryptType(ws.enc);
                     if (ws.key) srv.getWpaProcess().setKey(ws.key);   // WPA keys live in the WPA process, not WEP
-                } else {
-                    // the client's own settings, like the router's (setCurrentProfileStringIPs overran an internal
-                    // list with the arguments tried); its address comes from the host settings below
-                    var cli = wd.getProcess("WirelessClient");
-                    cli.setSsid(ws.ssid); cli.setAuthenType(ws.auth); cli.setEncryptType(ws.enc);
-                    if (ws.key) cli.getWpaProcess().setKey(ws.key);
-                    cli.resetAllAssociations();          // re-scan with the new settings
-                    RES.notes.push(wn + ": a wireless client's network profile cannot be set through Packet Tracer 9's " +
-                                   "API, so it may not join; prove its connectivity with --answer");
                 }
             } catch (e) { RES.errors.push("wireless " + wn + ": " + e); }
+        }
+        // preloaded wireless clients re-scan once the access points they join carry their new settings, as a
+        // laptop does when its network changes (observed: still associated to the old SSID, ping failed)
+        for (var k = 0; k < (PLAN.preload || []).length; k++) {
+            try { var pr = net.getDevice(PLAN.preload[k]).getProcess("WirelessClient"); if (pr) pr.resetAllAssociations(); }
+            catch (e) {}
         }
         RES.stage = "hosts";
         setHosts(false);
@@ -217,15 +221,19 @@ def plan(spec, result_path, save_path=None):
     if any(str(d.get("model", "")).startswith("wlc") for d in spec["device"]):
         settle = max(settle, 90_000)              # a lightweight AP boots, leases an address and joins over CAPWAP
     dhcp_ms = 45_000 if any(h["dhcp"] for h in hosts.values()) else 0
-    wireless = {}
+    wireless, preload = {}, []
     for d in spec["device"]:
         w = d.get("wireless")
-        if w and not w.get("in_start"):
+        if w and not w.get("in_start") and d["model"] not in ("home-router", "wrt300n"):
+            preload.append(d["name"])     # a client's profile: Packet Tracer 9's profile calls fail, see instrument
+        elif w and not w.get("in_start"):
             secure = w.get("security", "open") != "open"
             wireless[d["name"]] = {"role": "server" if d["model"] in ("home-router", "wrt300n") else "client",
                                    "ssid": w["ssid"], "auth": 4 if secure else 0, "enc": 4 if secure else 0,
                                    "key": w.get("passphrase", "") if secure else ""}
-    return {"links": links, "configs": configs, "hosts": hosts, "wireless": wireless, "boot_ms": 15_000, "settle_ms": max(settle, 20_000),
+    preload += [d["name"] for d in spec["device"] if d.get("wlc")]
+    return {"links": links, "configs": configs, "hosts": hosts, "wireless": wireless, "preload": preload,
+            "boot_ms": 15_000, "settle_ms": max(settle, 20_000),
             "dhcp_ms": dhcp_ms,
             "tests_ms": 25_000, "result": str(result_path), "save": str(save_path) if save_path else ""}
 
@@ -293,7 +301,9 @@ def instrument(spec, built, out_pka, result_path, save_path=None, answer=False):
         # clicks DHCP again (a wireless client's first request goes out before its AP has joined the WLC)
         dhcp = {h: s for h, s in p["hosts"].items() if s["dhcp"]}
         p.update({"links": [], "configs": {}, "hosts": dhcp, "wireless": {}, "dhcp_ms": 45_000 if dhcp else 0,
-                  "mode": "answer"})
+                  "mode": "answer", "preload": []})
+    else:
+        _preload(tree.getroot(), p["preload"])
     script = SCRIPT.replace("__PLAN__", json.dumps(p))
     s = ET.SubElement(sm.find("SCRIPTS"), "SCRIPT")
     ET.SubElement(s, "ID").text = "LiveCheck.js"
@@ -304,12 +314,38 @@ def instrument(spec, built, out_pka, result_path, save_path=None, answer=False):
     ptlab.write_pkt(tree, out_pka)
 
 
+# What only a GUI can set, by device role: the subtrees copied from the answer network into the start network.
+# A WLC is configured in its web GUI only (HTTPS with the browser's own login: the API's HTTP client reaches the
+# pages but cannot carry the credentials, and the CAPWAP process has no IPC methods); a wireless client's profile
+# calls fail in Packet Tracer 9 (vector::_M_range_check).
+PRELOAD_TAGS = ("CAPWAP_AC", "WLC_INTERFACES", "MANAGEMENT_INTERFACE", "WIRELESS_CLIENT")
+
+
+def _preload(root, names):
+    nets = root.findall("PACKETTRACER5")
+    if not names or len(nets) < 2:
+        return
+    find = lambda net, n: next((d for d in net.iter("DEVICE") if d.findtext("ENGINE/NAME") == n), None)
+    for n in names:
+        start, answer = find(nets[0], n), find(nets[-1], n)
+        if start is None or answer is None:
+            continue
+        for tag in PRELOAD_TAGS:
+            old, new = start.find("ENGINE/" + tag), answer.find("ENGINE/" + tag)
+            if old is not None and new is not None:
+                eng = start.find("ENGINE")
+                eng.insert(list(eng).index(old), copy.deepcopy(new))
+                eng.remove(old)
+
+
 def report(spec, result_path):
     """(ok, lines) from the script's JSON: full marks after solving, and not before."""
     res = json.load(open(result_path, encoding="utf-8"))
     lines, ok = [], res.get("stage") in ("tested", "done") and not res.get("errors")
     before, after, tests = res.get("before", {}), res.get("after", {}), res.get("tests", {})
-    lines.append(f"start state:   {before.get('correct', '?')}/{before.get('total', '?')} items")
+    preloaded = any(n.startswith("preloaded from the answer") for n in res.get("notes", []))
+    lines.append(f"start state:   {before.get('correct', '?')}/{before.get('total', '?')} items"
+                 + (" (with the GUI-only settings preloaded)" if preloaded else ""))
     lines.append(f"after solving: {after.get('correct', '?')}/{after.get('total', '?')} items, "
                  f"connectivity tests {tests.get('correct', '?')}/{tests.get('total', '?')}")
     if after and after.get("correct") != after.get("total"):
@@ -317,7 +353,8 @@ def report(spec, result_path):
     if tests and tests.get("correct") != tests.get("total"):
         ok = False
         lines += [f"  test {i + 1}: {r}" for i, r in enumerate(tests.get("results", []))]
-    if res.get("mode") != "answer" and before and before.get("total") and before.get("correct") == before.get("total"):
+    if (res.get("mode") != "answer" and not preloaded and before and before.get("total")
+            and before.get("correct") == before.get("total")):
         ok = False
         lines.append("  the start state already scores full marks")
     for dev, cmd, status, output in res.get("rejected", []):
