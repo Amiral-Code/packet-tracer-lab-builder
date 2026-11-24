@@ -162,5 +162,16 @@ Live-confirmed 2026-11-23 (`feature-probe-2.pka`, Check Results **40/40**, Conne
 
 ## Iteration 9: release
 
-- Versioned release with changelog, example gallery with screenshots, documentation for instructors and for
-  contributors, skill evaluations, and a full regression run (every example built, opened and live-checked).
+- ~~**v0.2.0**~~ released 2026-11-24 with changelog, example gallery (`docs/examples.md`), instructor and contributor
+  guides, and a full regression: every example built, round-tripped through Packet Tracer and live-checked in
+  both modes (22 runs).
+
+## Still open (needs a sample file or a person)
+
+- Structured cabling (patch panels, wall mounts) and cable bend points: neither the user's files nor Packet
+  Tracer's samples contain one; a file saved with them would show the format.
+- WLC-based WLANs (formats seen in the user's files: WLANs, RADIUS servers, dynamic interfaces).
+- Variable Manager pools inside one file (variants cover the need with one file per student).
+- The scripted scoring model (Main.js / ScoringModels.js) for messages beyond per-part scores.
+- GNS3 export of serial links, and topics only GNS3/CML can run.
+- GUI behaviours that no script can observe: locks, timers, views (a person checks these).
