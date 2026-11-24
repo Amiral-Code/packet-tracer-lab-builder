@@ -1,6 +1,6 @@
 # Example gallery
 
-Fourteen labs ship with the builder (and as `ptlab recipes`). Each one passes the spec check and self-check, Packet
+Fifteen labs ship with the builder (and as `ptlab recipes`). Each one passes the spec check and self-check, Packet
 Tracer's own round trip with every value identical to Packet Tracer's, and the live check: Packet Tracer solves it
 from the start state to full marks and every connectivity test, and its answer network passes on its own.
 
@@ -11,6 +11,7 @@ from the start state to full marks and every connectivity test, and its answer n
 | soho-cable-internet | `home-cable-internet` | 1 | configure | 25 min | cable a home to an ISP over coax, finish the provider's DHCP |
 | soho-wlan-wpa2 | `home-wlan-security` | 1 | configure | 20 min | rename and secure a home WLAN with WPA2-PSK, rejoin a laptop |
 | wlc-wlan | `wlc-clinic-wlan` | 2 | configure | 30 min | create a WPA2 WLAN on a WLC in its web GUI; a lightweight AP serves the laptop |
+| wlc-enterprise | `wlc-clinic-enterprise` | 3 | configure | 40 min | WPA2-Enterprise: RADIUS server, WLC, and a laptop that logs in with its own account |
 | static-routing | `static-two-sites` | 2 | configure | 30 min | address two sites, static and default routes |
 | acl-vlan-ospf | `feature-probe` | 2 | configure | 30 min | VLANs, routing and an extended ACL that allows web only |
 | serial-wan-ospf | `serial-wan-triangle` | 2 | configure | 40 min | three sites on serial lines: DCE clocking and OSPF |

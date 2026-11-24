@@ -5,6 +5,13 @@
 - Cable bend points and colours in the Physical view: `bends = [[x, y], ...]` and `color = "#rrggbb"` on a link,
   written as Packet Tracer 9 saves them (segments joined by break points), kept unchanged through Packet Tracer's
   own save.
+- WPA2-Enterprise: RADIUS servers on a WLC, WLANs with 802.1X, a server's AAA service (users and clients), clients
+  that log in with a username and password, all graded with Packet Tracer's own items (`radius`, `aaa`,
+  `wlan ... wpa2-ent`). New model `pc-wireless` (desktop with an 802.11n card). New example and recipe
+  `wlc-clinic-enterprise`, proven live in both modes.
+- Live check: a clock heartbeat. In an activity opened by a script Packet Tracer's clock barely moves on its own
+  (an AP's address took 100-180 s instead of 20 s and 802.1X logins timed out); the script now drives it every 15 s
+  until grading, as Packet Tracer runs for a person.
 - Fixed: every generated lab carried a stray cable drawing from the library's source file, which Packet Tracer
   attached to the lab's second cable in the Physical view.
 

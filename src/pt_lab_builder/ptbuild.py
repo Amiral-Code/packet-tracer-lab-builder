@@ -237,10 +237,11 @@ def insert_cards(root, device, cards, used_macs=None):
 
 # security -> (AUTHEN_TYPE, ENCRYPT_TYPE) as Packet Tracer stores them (a WPA2-Personal network in the user's files:
 # 4/4 with the passphrase in WEP_PROCESS/KEY; WPA2-Enterprise with a RADIUS server is 5)
-WIRELESS_SECURITY = {"open": ("0", "0"), "wpa2-psk": ("4", "4")}
+# (AUTHEN_TYPE, ENCRYPT_TYPE): 0 open, 4 WPA2-PSK, 5 WPA2-Enterprise (802.1X with a RADIUS server); 4 = AES
+WIRELESS_SECURITY = {"open": ("0", "0"), "wpa2-psk": ("4", "4"), "wpa2-enterprise": ("5", "4")}
 
 
-def _wireless_common(common, ssid, security, passphrase):
+def _wireless_common(common, ssid, security, passphrase, user="", password=""):
     auth, enc = WIRELESS_SECURITY[security]
     common.find("SSID").text = ssid
     common.find("AUTHEN_TYPE").text = auth
@@ -258,11 +259,12 @@ def _wireless_common(common, ssid, security, passphrase):
     for tag in ("KEY", "USERID", "PASSWORD", "ENCRYPTION"):
         if wep.find(tag) is None:
             ET.SubElement(wep, tag)
-    wep.find("KEY").text = passphrase
+    wep.find("KEY").text = "" if security == "wpa2-enterprise" else passphrase
+    wep.find("USERID").text, wep.find("PASSWORD").text = (user, password) if security == "wpa2-enterprise" else ("", "")
     wep.find("ENCRYPTION").text = enc
 
 
-def set_wireless(device, ssid, security="open", passphrase="", addressing=None):
+def set_wireless(device, ssid, security="open", passphrase="", addressing=None, user="", password=""):
     """A WLAN on a home router / Linksys (its 2.4 GHz network), or the network a wireless host joins. A host's joined
     profile carries its addressing ({"dhcp": True} or ip/mask/gw); Packet Tracer takes a wireless host's address
     from that profile."""
@@ -278,20 +280,23 @@ def set_wireless(device, ssid, security="open", passphrase="", addressing=None):
     client = eng.find("WIRELESS_CLIENT")
     if client is None:
         raise ValueError(f"{device.findtext('ENGINE/NAME')} has no wireless client")
-    _wireless_common(client.find("WIRELESS_COMMON"), ssid, security, passphrase)
+    _wireless_common(client.find("WIRELESS_COMMON"), ssid, security, passphrase, user, password)
     auth, enc = WIRELESS_SECURITY[security]
+    eap = security == "wpa2-enterprise"
     default = client.find("PROFILES/WIRELESS_PROFILE")
     profile = copy.deepcopy(default)
     a = addressing or {"dhcp": True}
-    for tag, value in (("NAME", ssid), ("SSID", ssid), ("AUTHEN_TYPE", auth), ("ENCRYPT_TYPE", enc),
-                       ("WEP_KEY", passphrase if security != "open" else ""),
+    for tag, value in (("NAME", "Default" if eap else ssid), ("SSID", ssid), ("AUTHEN_TYPE", auth), ("ENCRYPT_TYPE", enc),
+                       ("WEP_KEY", passphrase if security == "wpa2-psk" else ""),
+                       ("WPA_EAP_USERID", user if eap else ""), ("WPA_EAP_PASSWORD", password if eap else ""),
                        ("DHCP_ENABLED", "1" if a.get("dhcp") else "0"),
                        ("IP_ADDRESS", "" if a.get("dhcp") else a.get("ip", "")),
                        ("SUBNET_MASK", "" if a.get("dhcp") else a.get("mask", "")),
                        ("DEFAULT_GATEWAY", "" if a.get("dhcp") else a.get("gw", ""))):
         if profile.find(tag) is not None:
             profile.find(tag).text = value
-    client.find("PROFILES").insert(0, profile)
+    if not eap:   # Packet Tracer's own WPA2-Enterprise samples keep the profile as the current one only
+        client.find("PROFILES").insert(0, profile)
     current = client.find("CURRENT_PROFILE")
     for c in list(current):
         current.remove(c)
@@ -333,18 +338,52 @@ def set_wlc(device, cfg, used_macs, which="answer"):
         wi.append(port)
     vlan_of = {i["name"]: str(i["vlan"]) for i in cfg.get("interfaces", [])}
     ac = eng.find("CAPWAP_AC")
+    radius = [r for r in cfg.get("radius", []) if keep(r)]   # RADIUS servers (WPA2-Enterprise WLANs use the first)
+    for n, r in enumerate(radius, 1):
+        info = ET.SubElement(ac.find("RADIUS_SERVERS"), "ACS_SERVER_INFO")
+        for tag, value in (("IP", r["ip"]), ("PORT", str(r.get("port", 1645))), ("KEY", r["secret"]),
+                           ("IS_SINGLE_CONNECTION", "false"), ("INDEX", str(n)), ("SERVER_NAME", "")):
+            ET.SubElement(info, tag).text = value
     group = ac.find("AP_GROUPS/AP_GROUP/WLANS")
     for n, w in enumerate(filter(keep, cfg.get("wlans", [])), 1):
         auth, enc = WIRELESS_SECURITY[w.get("security", "wpa2-psk")]
         itf = w.get("interface", "management")
         wc = ET.SubElement(ac.find("WLANS"), "WLAN_CONFIG")
+        eap = w.get("security") == "wpa2-enterprise"
+        if eap and not radius:
+            raise ValueError(f"WLAN {w['ssid']}: wpa2-enterprise needs a radius server in the wlc setting")
+        r = radius[0] if eap else {}
         for tag, value in (("NAME", w.get("name", w["ssid"])), ("SSID", w["ssid"]), ("AUTHEN_TYPE", auth),
-                           ("ENCRYPT_TYPE", enc), ("WEP_KEY", w.get("passphrase", "")), ("RADIUS_IP", ""),
-                           ("RADIUS_PORT", "0"), ("RADIUS_SECRET", ""), ("RADIUS_SERVER_INDEX", "4294967295"),
+                           ("ENCRYPT_TYPE", enc), ("WEP_KEY", "" if eap else w.get("passphrase", "")),
+                           ("RADIUS_IP", r.get("ip", "")), ("RADIUS_PORT", str(r.get("port", 1645)) if eap else "0"),
+                           ("RADIUS_SECRET", r.get("secret", "")),
+                           ("RADIUS_SERVER_INDEX", "1" if eap else "4294967295"),
                            ("VLAN", vlan_of.get(itf, "0")), ("ID", str(n)), ("ENABLED", "true"),
-                           ("INTERFACE_NAME", itf), ("WLAN_SWITCH_MODE", "1"), ("WLAN_AUTHEN_MODE", "1")):
+                           ("INTERFACE_NAME", itf),
+                           # PSK WLANs as in Packet Tracer's simple-WLAN sample (1/1), 802.1X ones as in its RADIUS
+                           # sample (0/0)
+                           ("WLAN_SWITCH_MODE", "0" if eap else "1"), ("WLAN_AUTHEN_MODE", "0" if eap else "1")):
             ET.SubElement(wc, tag).text = value
         ET.SubElement(ET.SubElement(group, "WLAN"), "NAME").text = w.get("name", w["ssid"])
+
+
+def set_aaa(device, aaa, which="answer"):
+    """A server's AAA service as Packet Tracer stores it (its own WLC RADIUS sample): ACS_SERVER enabled, its users
+    and its clients (network devices allowed to ask it, each with the shared key). aaa = {users = [[name, password]],
+    clients = [{ip, secret, type = "RADIUS"}]}; written to the answer network only unless in_start = true."""
+    if which != "answer" and not aaa.get("in_start"):
+        return
+    acs = device.find("ENGINE/ACS_SERVER")
+    acs.find("ENABLED").text = "1"
+    for name, password in aaa.get("users", []):
+        u = ET.SubElement(acs.find("USERS"), "USER")
+        for tag, value in (("NAME", name), ("PASSWORD", password), ("DESCRIPTION", "")):
+            ET.SubElement(u, tag).text = value
+    for cl in aaa.get("clients", []):
+        c = ET.SubElement(acs.find("ACS_CLIENTS"), "CLIENT")
+        for tag, value in (("HOST_IP", cl["ip"]), ("KEY", cl["secret"]), ("DESCRIPTION", cl.get("name", "")),
+                           ("SERVER_TYPE", cl.get("type", "RADIUS"))):
+            ET.SubElement(c, tag).text = value
 
 
 def cloud_connections(device, pairs):

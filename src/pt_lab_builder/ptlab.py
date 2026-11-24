@@ -225,6 +225,10 @@ def run_check(c, devs, links=None):
             return False
         eng = d.find("ENGINE")
         common = None
+        if c.get("eap_user") and eng.find("WIRELESS_CLIENT") is not None:   # a host's 802.1X login
+            wp = eng.find("WIRELESS_CLIENT/WIRELESS_COMMON/WEP_PROCESS")
+            if wp is None or (wp.findtext("USERID"), wp.findtext("PASSWORD")) != tuple(c["eap_user"]):
+                return False
         if eng.find("CAPWAP_AC") is not None:     # a WLC: the WLAN named after its SSID, enabled, in the AP group
             ssid, auth, key = c["wlan"]
             wc = next((w for w in eng.iter("WLAN_CONFIG") if w.findtext("NAME") == ssid), None)
@@ -242,6 +246,21 @@ def run_check(c, devs, links=None):
         ssid, auth, key = c["wlan"]
         return (common.findtext("SSID") == ssid and common.findtext("AUTHEN_TYPE") == auth
                 and (key is None or common.findtext("WEP_PROCESS/KEY") == key))
+    if "radius" in c or "aaa" in c:
+        d = devs.get(c["device"])
+        if d is None:
+            return False
+        eng = d.find("ENGINE")
+        if "radius" in c:
+            first = eng.find("CAPWAP_AC/RADIUS_SERVERS/ACS_SERVER_INFO")
+            return first is not None and (first.findtext("IP"), first.findtext("KEY")) == tuple(c["radius"])
+        what, name, secret = c["aaa"]
+        acs = eng.find("ACS_SERVER")
+        if acs is None or acs.findtext("ENABLED") != "1":
+            return False
+        if what == "user":
+            return (name, secret) in [(u.findtext("NAME"), u.findtext("PASSWORD")) for u in acs.iter("USER")]
+        return (name, secret) in [(x.findtext("HOST_IP"), x.findtext("KEY")) for x in acs.iter("CLIENT")]
     if "cable" in c:  # a cable between exactly these two ports, of the expected type when one is given
         (a, pa, b, pb), want = c["cable"], c.get("cable_type")
         got = (links or {}).get(frozenset({(a, pa), (b, pb)}), False)
@@ -426,6 +445,15 @@ PKA_KINDS = {
                 "Encryption Type", "8", "Other"),
     "wlc_key": (["CAPWAP Wireless", "Wireless LANs", "{wlan}", "Security Mode"], "Pass Phrase", "PassPhrase", "8",
                 "Other"),
+    # WPA2-Enterprise on a wireless host: its 802.1X login (Packet Tracer's tree, WLC RADIUS sample lab)
+    "wlan_user": (["{radio}", "Security Mode"], "User Id", "User Id", "8", "Other"),
+    "wlan_pass": (["{radio}", "Security Mode"], "Password", "Password", "8", "Other"),
+    # a WLC's first RADIUS server, and a server's AAA service (users, and the devices allowed to ask it)
+    "wlc_radius_ip": (["CAPWAP Wireless", "Security", "RADIUS Servers", "1"], "Address", "Address", "0", "Other"),
+    "wlc_radius_key": (["CAPWAP Wireless", "Security", "RADIUS Servers", "1"], "Secret", "Secret", "8", "Other"),
+    "aaa_on": (["ACS"], "ACS Enabled", "ACS Enabled", "8", "Other"),
+    "aaa_user": (["ACS", "User Setup", "{user}"], "User Password", "User Password", "8", "Other"),
+    "aaa_client": (["ACS", "Client Records", "{ip}::R"], "Secret String", "Secret String", "8", "Other"),
     # the WLAN is offered by the APs of the default AP group (value and node = the WLAN's name)
     "wlc_group": (["CAPWAP Wireless", "AP Groups", "default-group", "WLANs"], "{wlan}", "{wlan}", "8", "Other"),
     "pool_start": (["DHCP Server", "Pools", "{pool}"], "Start IP address", "Start IP address", "0", "Ip"),

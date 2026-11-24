@@ -420,7 +420,7 @@ def text_match(spec_text):
 
 
 def ptbuild_model_is_host(model):
-    return model in ("pc", "server", "laptop", "printer", "tablet", "smartphone")
+    return model in ("pc", "pc-wireless", "server", "laptop", "printer", "tablet", "smartphone")
 
 
 # structured cabling: passive, no link light of their own (NetAcad grades their runs with Link-to items)
@@ -467,7 +467,7 @@ def cable_for(ma, mb, pa, pb):
         return "eSingleMode" if ma in SINGLE_MODE and mb in SINGLE_MODE else "eMultiMode"
     if ma in HOME_MODELS or mb in HOME_MODELS or ma in PASSIVE_MODELS or mb in PASSIVE_MODELS:
         return "eStraightThrough"      # every run to a patch panel or wall mount is straight-through
-    host = ("pc", "server", "laptop", "printer", "ipphone-7960", "ap", "ap-n", "ap-ac", "lap", "lap-3702i")
+    host = ("pc", "pc-wireless", "server", "laptop", "printer", "ipphone-7960", "ap", "ap-n", "ap-ac", "lap", "lap-3702i")
     cls = lambda m: "host" if m in host else "router" if m.startswith(("router", "asa")) else "switch"
     a, b = cls(ma), cls(mb)
     same = a == b or {a, b} == {"host", "router"}
@@ -564,7 +564,9 @@ def build_topology(spec, configs, pcs, which="answer"):
         w = d.get("wireless")
         if w and (which == "answer" or w.get("in_start")):   # the WLAN a home router offers, or a host joins
             ptbuild.set_wireless(t.devices[d["name"]], w["ssid"], w.get("security", "open"), w.get("passphrase", ""),
-                                 pcs_for(spec, which).get(d["name"]))
+                                 pcs_for(spec, which).get(d["name"]), w.get("user", ""), w.get("password", ""))
+        if d.get("aaa"):       # a server's AAA (RADIUS) service: users and the devices allowed to ask
+            ptbuild.set_aaa(t.devices[d["name"]], d["aaa"], which)
         if d.get("wlc"):       # a wireless LAN controller: management, dynamic interfaces, WLANs
             ptbuild.set_wlc(t.devices[d["name"]], d["wlc"], t.macs, which)
         if d.get("connect"):   # a Cloud's cable/DSL mapping: [["Coaxial7", "Ethernet6"], ["Modem4", ...]]
@@ -692,6 +694,7 @@ CONNECTIVITY_STATEMENTS = ("ping", "ping6", "tcp", *TCP_PORTS, "udp")
 GRADE_STATEMENTS = ("ip", "ip6", "up", "gw", "gw6", "hostname", "line", "in", "dhcp", "vlan", "access", "trunk",
                     "route", "route6", "ospf", "rid", "passive", "stp", "portfast", "portsec", "desc", "banner",
                     "nat", "acl", "hsrp", "pool", "secret", "user", "clock", "nameif", "seclevel", "object", "wlan",
+                    "radius", "aaa",
                     *CONNECTIVITY_STATEMENTS, "cable")
 # the rates IOS (and Packet Tracer) accept for `clock rate` on a DCE serial interface
 CLOCK_RATES = (1200, 2400, 4800, 9600, 19200, 38400, 56000, 64000, 72000, 125000, 128000, 148000, 250000, 500000,
@@ -1036,7 +1039,19 @@ def _statement(st, w, k, items, checks, spec):
         model = next((d["model"] for d in spec["device"] if d["name"] == dev), "")
         radio = "Wireless 2.4G" if model in ("home-router", "wrt300n") else "Wireless"
         secure = len(w) > 3 and w[3] == "wpa2"
-        if model.startswith("wlc"):     # on a controller: the WLAN profile named after its SSID
+        eap = len(w) > 3 and w[3] == "wpa2-ent"       # WPA2-Enterprise: 802.1X through a RADIUS server
+        if eap:
+            if model.startswith("wlc"):
+                for kind, value in (("wlc_ssid", ssid), ("wlc_on", "1"), ("wlc_auth", "5"), ("wlc_enc", "4"),
+                                    ("wlc_group", ssid)):
+                    items.append({"device": dev, "kind": kind, "wlan": ssid, "value": value})
+            else:
+                for kind, value in (("wlan_ssid", ssid), ("wlan_auth", "5"), ("wlan_enc", "4"),
+                                    ("wlan_user", w[4]), ("wlan_pass", w[5])):
+                    items.append({"device": dev, "kind": kind, "radio": radio, "value": value})
+            checks.append({"device": dev, "desc": f"{dev} WLAN {ssid} (WPA2-Enterprise)",
+                           "wlan": (ssid, "5", None), "eap_user": tuple(w[4:6]) if len(w) > 5 else None})
+        elif model.startswith("wlc"):     # on a controller: the WLAN profile named after its SSID
             items.append({"device": dev, "kind": "wlc_ssid", "wlan": ssid, "value": ssid})
             items.append({"device": dev, "kind": "wlc_on", "wlan": ssid, "value": "1"})
             items.append({"device": dev, "kind": "wlc_auth", "wlan": ssid, "value": "4" if secure else "0"})
@@ -1050,8 +1065,23 @@ def _statement(st, w, k, items, checks, spec):
             if secure:
                 items.append({"device": dev, "kind": "wlan_enc", "radio": radio, "value": "4"})
                 items.append({"device": dev, "kind": "wlan_key", "radio": radio, "value": w[4]})
-        checks.append({"device": dev, "desc": f"{dev} WLAN {ssid}" + (" (WPA2-PSK)" if secure else " (open)"),
-                       "wlan": (ssid, "4" if secure else "0", w[4] if secure else None)})
+        if not eap:
+            checks.append({"device": dev, "desc": f"{dev} WLAN {ssid}" + (" (WPA2-PSK)" if secure else " (open)"),
+                           "wlan": (ssid, "4" if secure else "0", w[4] if secure else None)})
+    elif k == "radius":                 # radius WLC IP SECRET: the controller's (first) RADIUS server
+        dev, ip, secret = w[1], w[2], w[3]
+        items.append({"device": dev, "kind": "wlc_radius_ip", "value": ip})
+        items.append({"device": dev, "kind": "wlc_radius_key", "value": secret})
+        checks.append({"device": dev, "desc": f"{dev} RADIUS server {ip}", "radius": (ip, secret)})
+    elif k == "aaa":                    # aaa SRV user NAME PASSWORD | aaa SRV client IP SECRET
+        dev, what, name, secret = w[1], w[2], w[3], w[4]
+        if not any(i["device"] == dev and i["kind"] == "aaa_on" for i in items):   # once per server
+            items.append({"device": dev, "kind": "aaa_on", "value": "1"})
+        if what == "user":
+            items.append({"device": dev, "kind": "aaa_user", "user": name, "value": secret})
+        else:
+            items.append({"device": dev, "kind": "aaa_client", "ip": name, "value": secret})
+        checks.append({"device": dev, "desc": f"{dev} AAA {what} {name}", "aaa": (what, name, secret)})
     elif k == "nameif":                 # nameif ASA IFACE NAME
         dev, iface = w[1], long_if(w[2])
         items.append({"device": dev, "kind": "nameif", "port": iface, "value": w[3]})

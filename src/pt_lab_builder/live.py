@@ -41,13 +41,15 @@ function solve() {
         var f = ipc.appWindow().getActiveFile();
         var net = ipc.network();
         RES.before = score(f);
+        // In an activity opened by a script, Packet Tracer's clock barely moves on its own (observed: an AP's DHCP
+        // lease took 100-180 s instead of 20 s, and 802.1X logins timed out); each connectivity-test run drives it.
+        // A heartbeat keeps the network running like a person's Packet Tracer until grading starts.
+        f.runConnectivityTests();
+        HEART = setInterval(function () { try { f.runConnectivityTests(); } catch (e) {} }, 15000);
         // settings only a GUI can make (a WLC's WLANs, a wireless client's profile) were written into this copy
-        // before it opened (see instrument); drive the clock now, or nothing moves until the tests run (observed:
-        // HTTP requests and the AP join stayed pending until runConnectivityTests started the simulation)
-        if (PLAN.preload && PLAN.preload.length) {
+        // before it opened (see instrument)
+        if (PLAN.preload && PLAN.preload.length)
             RES.notes.push("preloaded from the answer (GUI-only settings): " + PLAN.preload.join(", "));
-            f.runConnectivityTests();
-        }
         RES.stage = "cabling";
         var lw = ipc.appWindow().getActiveWorkspace().getLogicalWorkspace();
         for (var i = 0; i < PLAN.links.length; i++) {
@@ -140,8 +142,10 @@ function typeConfig(name, dev, lines) {
     try { term.unregisterEvent("outputWritten", null, grab); } catch (e) {}
 }
 
+var HEART = null;
 function grade() {
     try {
+        if (HEART) { clearInterval(HEART); HEART = null; }   // the graded test runs are the script's own
         RES.stage = "grading";
         out();
         var f = ipc.appWindow().getActiveFile();
@@ -231,7 +235,7 @@ def plan(spec, result_path, save_path=None):
             wireless[d["name"]] = {"role": "server" if d["model"] in ("home-router", "wrt300n") else "client",
                                    "ssid": w["ssid"], "auth": 4 if secure else 0, "enc": 4 if secure else 0,
                                    "key": w.get("passphrase", "") if secure else ""}
-    preload += [d["name"] for d in spec["device"] if d.get("wlc")]
+    preload += [d["name"] for d in spec["device"] if d.get("wlc") or d.get("aaa")]   # GUI-only, like a WLC
     return {"links": links, "configs": configs, "hosts": hosts, "wireless": wireless, "preload": preload,
             "boot_ms": 15_000, "settle_ms": max(settle, 20_000),
             "dhcp_ms": dhcp_ms,
@@ -318,7 +322,7 @@ def instrument(spec, built, out_pka, result_path, save_path=None, answer=False):
 # A WLC is configured in its web GUI only (HTTPS with the browser's own login: the API's HTTP client reaches the
 # pages but cannot carry the credentials, and the CAPWAP process has no IPC methods); a wireless client's profile
 # calls fail in Packet Tracer 9 (vector::_M_range_check).
-PRELOAD_TAGS = ("CAPWAP_AC", "WLC_INTERFACES", "MANAGEMENT_INTERFACE", "WIRELESS_CLIENT")
+PRELOAD_TAGS = ("CAPWAP_AC", "WLC_INTERFACES", "MANAGEMENT_INTERFACE", "WIRELESS_CLIENT", "ACS_SERVER")
 
 
 def _preload(root, names):

@@ -428,7 +428,7 @@ def _wlan_problem(w, model):
         return "write it as: wlan DEV SSID [wpa2 PASSPHRASE]"
     if len(w) == 5 and not 8 <= len(w[4]) <= 63:
         return "a WPA2 passphrase is 8 to 63 characters"
-    if model.get(w[1]) not in ("home-router", "wrt300n", "laptop", "pc", "tablet", "smartphone", "wlc-3504",
+    if model.get(w[1]) not in ("home-router", "wrt300n", "laptop", "pc", "pc-wireless", "tablet", "smartphone", "wlc-3504",
                                "wlc-2504"):
         return f"{w[1]} ({model.get(w[1])}) has no WLAN to grade (home router, Linksys, WLC or a wireless host)"
     return None
@@ -443,8 +443,21 @@ def _statement_problem(w, st, model, ports, first_addr, first_addr6=()):
     if k in need and len(w) != need[k]:
         return f"expects {need[k] - 1} fields after '{k}'"
     host = labgen.ptbuild_model_is_host(model.get(w[1], ""))
+    if k == "wlan" and len(w) > 3 and w[3] == "wpa2-ent":
+        is_wlc = str(model.get(w[1], "")).startswith("wlc")
+        if len(w) != (4 if is_wlc else 6):
+            return "write it as: wlan WLC SSID wpa2-ent, or wlan HOST SSID wpa2-ent USER PASSWORD"
+        return None
     if k == "wlan":
         return _wlan_problem(w, model)
+    if k == "radius":
+        if len(w) != 4 or not str(model.get(w[1], "")).startswith("wlc"):
+            return "write it as: radius WLC IP SECRET (on a wlc-3504 / wlc-2504)"
+        return None
+    if k == "aaa":
+        if len(w) != 5 or w[2] not in ("user", "client") or model.get(w[1]) != "server":
+            return "write it as: aaa SERVER user NAME PASSWORD, or aaa SERVER client IP SECRET (on a server)"
+        return None
     ios_only = ("route", "route6", "ospf", "rid", "passive", "stp", "portfast", "portsec", "nat", "acl", "hsrp",
                 "pool", "secret", "user", "banner", "desc", "vlan", "access", "trunk", "line", "in", "hostname",
                 "clock")

@@ -1,0 +1,168 @@
+[lab]
+id = "wlc-clinic-enterprise"
+title = "Staff Logins on the WLAN: WPA2-Enterprise with RADIUS"
+level = 3
+kind = "configure"
+exam = "CCNA 5.9 / 2.8 - WPA2-Enterprise, RADIUS, WLC security settings"
+time = 40
+scenario = """
+The Agadir clinic's staff WLAN still uses one shared passphrase, and it has leaked. The
+WLAN must change to **WPA2-Enterprise**: every nurse logs in with their own account,
+checked by the clinic's **RADIUS server**, so one person's access can be removed without
+changing anything for the others.
+
+The controller, the access point and the server are cabled and addressed. Set up the
+RADIUS server, point the controller at it, create the WLAN, and log the laptop in.
+"""
+objectives = [
+  "Explain why 802.1X (WPA2-Enterprise) scales better than a pre-shared key",
+  "Configure a RADIUS server: its client (the WLC, with a shared secret) and a user account",
+  "Add a RADIUS server to a WLC and create a WLAN that authenticates through it",
+  "Join a client with a username and password and verify it",
+]
+
+[[device]]
+name = "CL-R1"
+model = "router-2911"
+x = 420
+y = 120
+[[device]]
+name = "CL-SW1"
+model = "switch-2960"
+x = 420
+y = 250
+[[device]]
+name = "CL-WLC1"
+model = "wlc-3504"
+x = 620
+y = 250
+wlc = { management = "192.168.60.2/24", gateway = "192.168.60.1", radius = [{ ip = "192.168.60.5", secret = "RadKey60" }], wlans = [{ ssid = "ClinicStaff", security = "wpa2-enterprise" }] }
+[[device]]
+name = "CL-AP1"
+model = "lap"
+x = 260
+y = 380
+[[device]]
+name = "ADMIN-PC"
+model = "pc"
+x = 600
+y = 400
+[[device]]
+name = "CL-RADIUS"
+model = "server"
+x = 760
+y = 400
+aaa = { users = [["NurseAmal", "Ward7Pass"]], clients = [{ ip = "192.168.60.2", secret = "RadKey60", name = "CL-WLC1" }] }
+[[device]]
+name = "STAFF-LAPTOP"
+model = "laptop"
+x = 260
+y = 520
+wireless = { ssid = "ClinicStaff", security = "wpa2-enterprise", user = "NurseAmal", password = "Ward7Pass" }
+
+[[link]]
+a = "CL-R1 G0/0"
+b = "CL-SW1 G0/1"
+[[link]]
+a = "CL-SW1 Fa0/1"
+b = "CL-AP1 G0"
+[[link]]
+a = "CL-SW1 Fa0/2"
+b = "CL-WLC1 GigabitEthernet1"
+[[link]]
+a = "CL-SW1 Fa0/3"
+b = "ADMIN-PC Fa0"
+[[link]]
+a = "CL-SW1 Fa0/4"
+b = "CL-RADIUS Fa0"
+
+[[area]]
+label = "CLINIC LAN  -  192.168.60.0/24"
+color = "blue"
+devices = ["CL-R1", "CL-SW1", "CL-WLC1", "CL-AP1", "ADMIN-PC", "CL-RADIUS", "STAFF-LAPTOP"]
+
+[addressing]
+rows = [
+  ["CL-R1",        "G0/0",      "192.168.60.1/24",  ""],
+  ["ADMIN-PC",     "Fa0",       "192.168.60.10/24", "192.168.60.1"],
+  ["CL-RADIUS",    "Fa0",       "192.168.60.5/24",  "192.168.60.1"],
+  ["CL-AP1",       "G0",        "dhcp",             ""],
+  ["STAFF-LAPTOP", "Wireless0", "dhcp",             ""],
+]
+
+# the clinic router hands out addresses to the AP and the wireless clients (infrastructure: in both networks)
+[config.start]
+CL-R1 = """
+ip dhcp excluded-address 192.168.60.1 192.168.60.20
+ip dhcp pool CLINIC
+ network 192.168.60.0 255.255.255.0
+ default-router 192.168.60.1
+interface G0/0
+ ip address 192.168.60.1 255.255.255.0
+ no shutdown
+"""
+
+[config.answer]
+CL-R1 = """
+ip dhcp excluded-address 192.168.60.1 192.168.60.20
+ip dhcp pool CLINIC
+ network 192.168.60.0 255.255.255.0
+ default-router 192.168.60.1
+interface G0/0
+ ip address 192.168.60.1 255.255.255.0
+ no shutdown
+"""
+
+[[part]]
+title = "Prepare the RADIUS server"
+intro = "The server authenticates users for the controller. The controller and the server must agree on a shared secret."
+steps = [
+  "On **CL-RADIUS**, **Services > AAA**: turn the service **On**.",
+  "Add a network client: name **CL-WLC1**, client IP **192.168.60.2**, secret **RadKey60**, server type **Radius**.",
+  "Add a user: **NurseAmal**, password **Ward7Pass**.",
+]
+hint = "The client IP is the controller's management address: that is where the RADIUS requests come from."
+why = "The server only answers devices it knows, and only users it has accounts for."
+
+[[part]]
+title = "Point the controller at RADIUS and create the WLAN"
+intro = "From ADMIN-PC, browse to **https://192.168.60.2** (user admin, password Cisco123)."
+steps = [
+  "**Security > RADIUS > Authentication > New**: server **192.168.60.5**, shared secret **RadKey60**, port 1645.",
+  "**WLANs > Create New**: profile and SSID **ClinicStaff**, interface **management**, status **Enabled**.",
+  "WLAN **Security > Layer 2**: **WPA+WPA2**, WPA2 policy with **AES**, authentication key management **802.1X**; on the **AAA Servers** tab choose **192.168.60.5**.",
+]
+hint = "If the laptop never connects, compare the shared secret on the controller and the server, character for character."
+why = "With 802.1X the controller only relays the login: the decision is made by the RADIUS server."
+
+[[part]]
+title = "Log in and verify"
+intro = "Join the laptop like an employee would."
+steps = [
+  "On **STAFF-LAPTOP**, **Config > Wireless0**: SSID **ClinicStaff**, **WPA2-Enterprise**, user **NurseAmal**, password **Ward7Pass**, DHCP.",
+  "Check the laptop has a 192.168.60.x address, then ping **ADMIN-PC** (192.168.60.10).",
+  "Click **Check Results**.",
+]
+hint = "A wrong password gives no address at all: the AP only lets traffic through once the RADIUS server accepts the login."
+why = "Each person now has their own login: removing one account on the server removes that person's access only."
+
+[grade]
+items = [
+  "aaa CL-RADIUS client 192.168.60.2 RadKey60",
+  "aaa CL-RADIUS user NurseAmal Ward7Pass",
+  "radius CL-WLC1 192.168.60.5 RadKey60",
+  "wlan CL-WLC1 ClinicStaff wpa2-ent",
+  "wlan STAFF-LAPTOP ClinicStaff wpa2-ent NurseAmal Ward7Pass",
+  "ping STAFF-LAPTOP ADMIN-PC",
+]
+
+debrief = """
+A pre-shared key is one secret for everyone: when it leaks, everyone's access must change.
+With WPA2-Enterprise each user logs in with their own credentials, the controller relays
+the login to the RADIUS server (802.1X), and the server decides. That is how most company
+WLANs work.
+"""
+questions = [
+  "A nurse leaves the clinic. What do you change with a PSK WLAN, and what with WPA2-Enterprise?",
+  "The laptop sees ClinicStaff but never gets an address. Name two settings to compare first.",
+]

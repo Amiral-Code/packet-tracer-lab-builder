@@ -373,6 +373,30 @@ class Controller(unittest.TestCase):
         self.assertFalse(ptlab.run_check(checks[0], {"WLC1": start}))     # the start network has no WLAN
 
 
+class Enterprise(unittest.TestCase):
+    def test_radius_aaa_and_eap_items_and_checks(self):
+        from pt_lab_builder import ptbuild
+        spec = {"lab": {"title": "t", "scenario": "s", "kind": "configure"},
+                "device": [{"name": "WLC1", "model": "wlc-3504"}, {"name": "SRV", "model": "server"},
+                           {"name": "LAP", "model": "laptop"}],
+                "grade": {"items": ["radius WLC1 10.0.0.5 Sec1", "aaa SRV user Ann Pw1", "aaa SRV client 10.0.0.2 Sec1",
+                                    "wlan WLC1 Staff wpa2-ent", "wlan LAP Staff wpa2-ent Ann Pw1"]}}
+        items, checks = labgen.compile_grade(spec)
+        kinds = [(i["device"], i["kind"]) for i in items]
+        self.assertEqual(kinds.count(("SRV", "aaa_on")), 1)
+        self.assertIn(("WLC1", "wlc_radius_key"), kinds)
+        self.assertIn(("LAP", "wlan_user"), kinds)
+        self.assertEqual([i["value"] for i in items if i["kind"] in ("wlc_auth", "wlan_auth")], ["5", "5"])
+        node = ptlab.comparisons([i for i in items if i["kind"] == "aaa_client"])
+        self.assertIn("10.0.0.2::R", [n.findtext("ID") for n in node.iter("NODE")])
+        srv = ET.fromstring("<DEVICE><ENGINE><ACS_SERVER><ENABLED>0</ENABLED><USERS/><ACS_CLIENTS/></ACS_SERVER>"
+                            "</ENGINE></DEVICE>")
+        aaa_checks = [c for c in checks if "aaa" in c]
+        self.assertFalse(ptlab.run_check(aaa_checks[0], {"SRV": srv}))
+        ptbuild.set_aaa(srv, {"users": [["Ann", "Pw1"]], "clients": [{"ip": "10.0.0.2", "secret": "Sec1"}]})
+        self.assertTrue(all(ptlab.run_check(c, {"SRV": srv}) for c in aaa_checks))
+
+
 class MergeSections(unittest.TestCase):
     def test_router_id_stays_inside_router_ospf(self):
         out = labgen.merge(["version 15.1", "!", "end"], "router ospf 10\n router-id 2.2.2.2\n network 10.0.0.0 0.0.0.3 area 0\n")

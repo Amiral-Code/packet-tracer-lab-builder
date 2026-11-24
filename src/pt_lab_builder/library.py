@@ -134,6 +134,12 @@ def library_key(device):
         return None
     if t.text in HOME_ROUTER_TYPES and not stock_home_router(device):
         return None
+    if t.text == "Pc" and t.get("model") == "PC-PT":
+        # a desktop with a wireless card (Linksys-WMP300N, 802.11n) is its own model: Packet Tracer's WPA2-Enterprise
+        # samples all use one; the plain `pc` stays wired
+        radios = {p.findtext("TYPE") for p in device.iter("PORT")} & {"eHostWirelessN", "eHostWirelessG", "eHostWirelessAC"}
+        if radios:
+            return "pc-wireless" if radios == {"eHostWirelessN"} else None
     return WANT.get((t.text, t.get("model")))
 
 

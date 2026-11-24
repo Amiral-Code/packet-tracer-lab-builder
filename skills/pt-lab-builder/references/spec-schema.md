@@ -59,6 +59,14 @@ Type, Encryption Type, Pass Phrase, and AP-group membership; the WLAN profile na
 `wlan LAPTOP ...` and a ping. Students configure the WLC in its web GUI from a PC (default login admin / Cisco123).
 The live check preloads the WLC's WLANs in solve mode (its GUI cannot be scripted). Example: `wlc-clinic-wlan`.
 
+WPA2-Enterprise (802.1X with a RADIUS server): on the WLC `radius = [{ ip, secret, port = 1645 }]` and a WLAN with
+`security = "wpa2-enterprise"` (it uses the first RADIUS server); on a `server`
+`aaa = { users = [[name, password]], clients = [{ ip = WLC management address, secret, name }] }`; on the client
+`wireless = { ssid, security = "wpa2-enterprise", user, password }`. Grade with `radius WLC IP SECRET`,
+`aaa SERVER user NAME PASSWORD`, `aaa SERVER client IP SECRET`, `wlan WLC SSID wpa2-ent` and
+`wlan HOST SSID wpa2-ent USER PASSWORD` (all Packet Tracer's own items). `pc-wireless` is a desktop PC with an
+802.11n card. Example: `wlc-clinic-enterprise`.
+
 Per-part scores: a `[[part]]` may list its own `grade = [...]` statements; Check Results then shows a score per part
 (the part title is the items' component). Statements under parts are added to the lab's grading automatically.
 

@@ -503,3 +503,28 @@ Source: a file saved for the purpose by the author (PT 9.0.1: two PCs, one coppe
 - Proof: a lab with one cable bent twice and coloured, another only coloured: after Packet Tracer's save, both bends,
   their joins, the segments and both colours are unchanged.
 
+## WPA2-Enterprise with RADIUS (2026-11-24)
+
+Sources: Packet Tracer's samples `wlc_2504_simple_wlan_wpa_radius.pkt`, `wlc_pt_*_wpa_radius.pkt`,
+`wpa_eap_test.pkt`, `meraki_SA_wireless_wpa2_enterprise.pkt`.
+
+- WLC: `CAPWAP_AC/RADIUS_SERVERS/ACS_SERVER_INFO` (IP, PORT 1645, KEY, IS_SINGLE_CONNECTION, INDEX 1, SERVER_NAME);
+  the WLAN has AUTHEN_TYPE 5 / ENCRYPT_TYPE 4, RADIUS_IP/PORT/SECRET, RADIUS_SERVER_INDEX 1, WLAN_SWITCH_MODE and
+  WLAN_AUTHEN_MODE 0.
+- Server: `ACS_SERVER` (ENABLED 1, USERS/USER NAME+PASSWORD, ACS_CLIENTS/CLIENT HOST_IP+KEY+DESCRIPTION+SERVER_TYPE
+  RADIUS, RADIUS_SETTINGS/AUTH_PORT 1645).
+- Client: profile AUTHEN_TYPE 5, WPA_EAP_USERID / WPA_EAP_PASSWORD; WIRELESS_COMMON/WEP_PROCESS USERID/PASSWORD.
+  Every EAP client in the samples is a PC-PT with a Linksys-WMP300N (802.11n) card.
+- Graded items (bare save): WLC `Security > RADIUS Servers > 1 > Address/Port/Secret`, WLAN `Security Mode > Radius
+  Server Address / Radius Shared Secret`; server `ACS > ACS Enabled`, `ACS > Client Records > IP::R > Client Name /
+  Client IP / Server Type / Secret String`, `ACS > User Setup > NAME > User Password`; client `Wireless > Security
+  Mode > User Id / Password`.
+- Diagnosis: the generated lab's answer network failed in the live check while Packet Tracer's sample worked (both
+  PCs leased within 40-100 s). Grafting the sample's client into the lab, changing the WLC model, the client card,
+  the profile name and the credentials changed nothing; the same network saved as a plain .pkt worked (AP address
+  at 20 s, client logged in and leased at 80 s). In the activity, under the script, the clock barely moved (AP at
+  100-180 s) and 802.1X timed out; re-running the connectivity tests every 15 s restored normal timing (AP at 20 s,
+  client at 60 s). The live script now keeps that heartbeat until grading.
+- Proof (`wlc-clinic-enterprise`): items kept 15/15 with Packet Tracer's values; live answer mode 15/15 and ping;
+  solve mode (WLC, server AAA and client preloaded) 15/15 and ping.
+
