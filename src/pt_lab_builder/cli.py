@@ -69,6 +69,17 @@ def parser() -> argparse.ArgumentParser:
     lp.add_argument("--save", type=Path, help="also save the solved network here (absolute path)")
     lp.add_argument("--answer", action="store_true", help="run the answer network itself live instead of solving "
                                                            "the student's (proves the design; covers wireless clients)")
+    va = sub.add_parser("variants", help="write N re-addressed copies of a lab (one per student), each checked; "
+                                         "--build also builds them with their answer keys")
+    va.add_argument("spec", type=Path)
+    va.add_argument("--count", type=int, default=30)
+    va.add_argument("--seed", default="ptlab", help="same seed, same variants")
+    va.add_argument("--output-dir", type=Path, required=True)
+    va.add_argument("--build", action="store_true")
+    gr = sub.add_parser("grade", help="grade every saved .pka in a folder into grades.csv and grades.html")
+    gr.add_argument("spec", type=Path, help="the lab spec, or a folder of its variant specs")
+    gr.add_argument("folder", type=Path, help="folder of saved student .pka files")
+    gr.add_argument("--output-dir", type=Path, help="where to write the reports (default: the folder)")
     lr = sub.add_parser("live-report", help="verdict from a live-prepare script's JSON report")
     lr.add_argument("spec", type=Path)
     lr.add_argument("result", type=Path)
@@ -116,6 +127,42 @@ def main(argv: list[str] | None = None) -> int:
         live.instrument(spec, str(args.built), str(args.output), args.result.resolve(),
                         args.save.resolve() if args.save else None, answer=args.answer)
         print(f"wrote {args.output}")
+        return 0
+    if args.command == "variants":
+        from . import validate, variants
+        text = args.spec.read_text(encoding="utf-8")
+        out = args.output_dir.resolve()
+        out.mkdir(parents=True, exist_ok=True)
+        seen, made = {text}, []
+        for i in range(1, args.count + 1):
+            for attempt in range(10):
+                vtext = variants.make(text, i, f"{args.seed}/{attempt}")
+                if vtext in seen:
+                    continue
+                spec_id = labgen.load_spec(str(args.spec))["_id"]
+                path = out / f"{spec_id}-v{i:02d}.toml"
+                path.write_text(vtext, encoding="utf-8")
+                spec = labgen.load_spec(str(path))
+                problems = validate.lint(spec).errors or validate.selfcheck(spec)[0].errors
+                if not problems:
+                    seen.add(vtext)
+                    made.append(path)
+                    break
+            else:
+                raise SystemExit(f"variant {i}: no consistent re-addressing found in 10 draws")
+        print(f"{len(made)} variants in {out}, each passing the spec check and self-check")
+        if args.build:
+            for path in made:
+                labgen.build(str(path), False, out)
+        return 0
+    if args.command == "grade":
+        from . import grading
+        rows = grading.grade_dir(args.spec, args.folder)
+        csv_path, html_path = grading.write_reports(rows, (args.output_dir or args.folder).resolve())
+        for r in rows:
+            got = [ok for _, ok in r["results"]]
+            print(f"{r['student']:30} {r['variant']:40} {sum(got)}/{len(got)} {r['error']}")
+        print(f"wrote {csv_path} and {html_path}")
         return 0
     if args.command == "live-report":
         from . import live

@@ -118,14 +118,18 @@ Live-confirmed 2026-11-23 (`feature-probe-2.pka`, Check Results **40/40**, Conne
 
 ## Iteration 4: every student gets a different lab
 
-- Variable Manager pools (seed, number, string, IP) generated from the spec: addressing and names change per
-  student; items accept the student's own values ("Entire Range").
+- ~~**`ptlab variants SPEC --count N`**~~ consistent re-addressing of the private IPv4 space per student (10.A,
+  172.16-31.B, 192.168.C; wider prefixes and ACL wildcards follow), each variant passing the spec check and
+  self-check before it is written, reproducible from a seed, `--build` for the files and answer keys.
+- Variable Manager pools (seed, number, string, IP) inside one file: addressing and names change per student
+  (open: the variants above give the same result with one file per student, which every Packet Tracer reads).
 - Object location sets so even the logical layout differs.
 - `ptlab variants SPEC -n 30`: thirty distinct, individually proven files plus one answer key per file.
 
 ## Iteration 5: instructor workflow
 
-- `ptlab grade DIR` batch grading of saved student files into a CSV and an HTML report (per item, per student).
+- ~~**`ptlab grade SPEC DIR`**~~ batch grading of saved student files into grades.csv and grades.html (per student,
+  per check); with a folder of variant specs each file is graded against the variant it matches.
 - Topic recipes the skill composes: VLAN + router-on-a-stick, inter-VLAN on L3 switch, OSPF single/multi-area,
   EtherChannel, STP tuning, HSRP, DHCP + relay, ACL policy, NAT/PAT, IPv6 dual-stack, port security, SSH hardening,
   wireless. Each recipe brings its config, faults, grade statements and connectivity tests.

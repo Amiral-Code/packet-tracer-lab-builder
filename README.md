@@ -76,6 +76,13 @@ ptlab bare work/lab.pka work/lab-bare.pka               # open + save this copy 
 ptlab verify SPEC.toml SAVED.pka --values work/lab-bare.pka   # every value equals Packet Tracer's own
 ```
 
+One file per student and a class report:
+
+```bash
+ptlab variants SPEC.toml --count 30 --output-dir work/class --build   # 30 re-addressed labs + answer keys
+ptlab grade work/class submitted/                                   # grades.csv + grades.html
+```
+
 Then let Packet Tracer solve the lab itself: `ptlab live-prepare` copies the activity with a script (Packet Tracer's
 own JavaScript engine and API) that records the start score, adds the student's cables, types every answer
 configuration at each device's console, sets host addresses, waits, and records Check Results and the Connectivity
