@@ -15,6 +15,8 @@ RECIPES = {
                          "patch a branch in the Physical view: straight-through vs crossover"),
     "structured-cabling": ("structured-cabling", "1.3 cabling, structured cabling", 1, "configure", 25,
                            "run desk-to-switch cabling through wall plates and a patch panel, jack by jack"),
+    "wlc-wlan": ("wlc-clinic-wlan", "2.6-2.8 WLC, AP join, 5.9 WLAN", 2, "configure", 30,
+                 "create a WPA2 WLAN on a controller from its web GUI; its lightweight AP serves a laptop"),
     "soho-cable-internet": ("home-cable-internet", "1.2 SOHO, 1.3 coax, 4.3 DHCP", 1, "configure", 25,
                             "cable a home to an ISP over coax and finish the provider's DHCP"),
     "soho-wlan-wpa2": ("home-wlan-security", "1.11 wireless, 5.9 WPA2", 1, "configure", 20,

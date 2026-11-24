@@ -50,6 +50,9 @@ PORT_NAMES = {
     # access points: the Ethernet port is "Port 0" (links in the user's files; the library had FastEthernet0)
     "AccessPoint-PT": ["Port 0"], "AccessPoint-PT-N": ["Port 0"], "AccessPoint-PT-AC": ["Port 0"],
     "3702i": ["GigabitEthernet0"], "LAP-PT": ["GigabitEthernet0"],
+    # WLC data ports count from 1 (Packet Tracer's own WLC samples and NetAcad cable GigabitEthernet1)
+    "WLC-3504": ["GigabitEthernet1", "GigabitEthernet2", "GigabitEthernet3"],
+    "WLC-2504": ["GigabitEthernet1", "GigabitEthernet2", "GigabitEthernet3", "GigabitEthernet4"],
     # structured cabling (NetAcad 1.1.4): jacks at the front, punch-downs at the back
     "Copper Patch Panel": [f"Jack{i}" for i in range(1, 25)] + [f"PunchDown{i}" for i in range(1, 25)],
     "Copper Wall Mount": [f"Jack{i}" for i in range(1, 5)] + [f"PunchDown{i}" for i in range(1, 5)],
@@ -228,6 +231,35 @@ def factory_reset(device, kind):
             p.find("PORT_DHCP_ENABLE").text = "false"
     if eng.find("GATEWAY") is not None:
         eng.find("GATEWAY").text = ""
+    if kind == "wlc":   # no WLANs, joined APs, dynamic interfaces or RADIUS servers; its day-0 DHCP server off
+        ac = eng.find("CAPWAP_AC")
+        for path in ("WLANS", "APS", "RADIUS_SERVERS", "AP_GROUPS/AP_GROUP/WLANS"):
+            for holder in ac.findall(path):
+                for c in list(holder):
+                    holder.remove(c)
+        wi = eng.find("WLC_INTERFACES")
+        for p in list(wi.findall("PORT")):
+            if p.findtext("NAME") not in ("management", "virtual"):
+                wi.remove(p)
+            elif p.findtext("NAME") == "virtual":     # the fixed virtual address, as every sample has it
+                p.find("IP").text, p.find("SUBNET").text = "192.0.2.1", "255.255.255.255"
+            elif p.find("DHCP_SERVER_IP") is not None:
+                p.find("DHCP_SERVER_IP").text = "0.0.0.0"
+        # DHCP: keep only the factory day-0 pool (192.168.1.0/28); a sample's own pools go. Packet Tracer reports the
+        # server enabled whatever ENABLED says, so the pools are what matters. The WLC saves DHCP_SERVERS twice.
+        for pools in eng.findall("DHCP_SERVERS/ASSOCIATED_PORTS/ASSOCIATED_PORT/DHCP_SERVER/POOLS"):
+            for pool in list(pools):
+                if pool.findtext("NAME") != "day0-dhcp-mgmt":
+                    pools.remove(pool)
+    if kind == "lap":   # an AP keeps a copy of the WLANs it last learned; it always takes its address by DHCP
+        for holder in eng.findall("CAPWAP/WLANS"):
+            for c in list(holder):
+                holder.remove(c)
+        if eng.find("CAPWAP/PRIMARY_AC") is not None:
+            eng.find("CAPWAP/PRIMARY_AC").text = "0.0.0.0"
+        for p in device.iter("PORT"):
+            if p.find("PORT_DHCP_ENABLE") is not None:
+                p.find("PORT_DHCP_ENABLE").text = "true"
     for prof in device.iter("WIRELESS_PROFILE"):     # a sample's wireless profile may carry a static address
         for tag in ("IP_ADDRESS", "SUBNET_MASK", "DEFAULT_GATEWAY", "DNS"):
             if prof.find(tag) is not None:
@@ -405,7 +437,9 @@ def build(sources, destination=None, extra_sources=()):
         strip_user_apps(d)
         ty = d.find("ENGINE/TYPE").text
         factory_reset(d, "router" if ty == "Router" else "switch" if ty in ("Switch", "MultiLayerSwitch")
-                      else "home" if ty in HOME_ROUTER_TYPES else "asa" if ty == "ASA" else "host")
+                      else "home" if ty in HOME_ROUTER_TYPES else "asa" if ty == "ASA"
+                      else "wlc" if ty == "WirelessLanController" else "lap" if ty == "LightWeightAccessPoint"
+                      else "host")
         ET.ElementTree(d).write(devices_out / (key + ".xml"), encoding="utf-8")
         ifaces = [i for i in ifaces if "." not in i and (not i.startswith("Vlan") or i == "Vlan1")]
         index[key] = {"type": d.find("ENGINE/TYPE").text, "model": d.find("ENGINE/TYPE").get("model"),

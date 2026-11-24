@@ -225,6 +225,12 @@ def run_check(c, devs, links=None):
             return False
         eng = d.find("ENGINE")
         common = None
+        if eng.find("CAPWAP_AC") is not None:     # a WLC: the WLAN named after its SSID, enabled, in the AP group
+            ssid, auth, key = c["wlan"]
+            wc = next((w for w in eng.iter("WLAN_CONFIG") if w.findtext("NAME") == ssid), None)
+            grouped = ssid in [w.findtext("NAME") for w in eng.findall("CAPWAP_AC/AP_GROUPS/AP_GROUP/WLANS/WLAN")]
+            return (wc is not None and grouped and wc.findtext("SSID") == ssid and wc.findtext("ENABLED") == "true"
+                    and wc.findtext("AUTHEN_TYPE") == auth and (key is None or wc.findtext("WEP_KEY") == key))
         if eng.find("WIRELESS_SERVERS") is not None and len(eng.find("WIRELESS_SERVERS")):
             common = eng.find("WIRELESS_SERVERS")[0].find("WIRELESS_COMMON")
         elif d.findtext("ENGINE/TYPE") in ("WirelessRouter", "AccessPoint") and eng.find("WIRELESS_SERVER") is not None:
@@ -411,6 +417,17 @@ PKA_KINDS = {
     "wlan_auth": (["{radio}", "Security Mode"], "Authen Type", "Authen Type", "8", "Other"),       # 0 open, 4 WPA2-PSK
     "wlan_enc": (["{radio}", "Security Mode"], "Encryption Type", "Encryption Type", "8", "Other"),  # 4 AES
     "wlan_key": (["{radio}", "Security Mode"], "Pass Phrase", "PassPhrase", "8", "Other"),   # display, node ID
+    # a WLC's WLAN (Packet Tracer's own tree: CAPWAP Wireless > Wireless LANs > PROFILE), same leaves as above
+    "wlc_ssid": (["CAPWAP Wireless", "Wireless LANs", "{wlan}"], "SSID", "SSID", "8", "Other"),
+    "wlc_on": (["CAPWAP Wireless", "Wireless LANs", "{wlan}"], "Enabled", "Enabled", "8", "Other"),
+    "wlc_auth": (["CAPWAP Wireless", "Wireless LANs", "{wlan}", "Security Mode"], "Authen Type", "Authen Type", "8",
+                 "Other"),
+    "wlc_enc": (["CAPWAP Wireless", "Wireless LANs", "{wlan}", "Security Mode"], "Encryption Type",
+                "Encryption Type", "8", "Other"),
+    "wlc_key": (["CAPWAP Wireless", "Wireless LANs", "{wlan}", "Security Mode"], "Pass Phrase", "PassPhrase", "8",
+                "Other"),
+    # the WLAN is offered by the APs of the default AP group (value and node = the WLAN's name)
+    "wlc_group": (["CAPWAP Wireless", "AP Groups", "default-group", "WLANs"], "{wlan}", "{wlan}", "8", "Other"),
     "pool_start": (["DHCP Server", "Pools", "{pool}"], "Start IP address", "Start IP address", "0", "Ip"),
     "pool_mask": (["DHCP Server", "Pools", "{pool}"], "Subnet mask", "Subnet mask", "0", "Ip"),
     "pool_gw": (["DHCP Server", "Pools", "{pool}"], "Default Gateway", "Default Gateway", "0", "Ip"),
@@ -427,7 +444,7 @@ def comparisons(items):
         path, name, nid, eclass, comp = PKA_KINDS[it["kind"]]
         comp = it.get("component") or comp          # a lab part ("Hardening") instead of the generic class
         nid = nid.format(**it)
-        if it["kind"] == "link_to":
+        if it["kind"] in ("link_to", "wlc_group"):
             name = name.format(**it)
         cur = _child(root, it["device"])
         for part in path:

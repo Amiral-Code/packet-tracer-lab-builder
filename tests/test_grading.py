@@ -312,6 +312,67 @@ class StructuredCabling(unittest.TestCase):
                          ("Connects to FastEthernet0", "Connects to FastEthernet0"))
 
 
+WLC_XML = """<DEVICE><ENGINE><TYPE model="WLC-3504">WirelessLanController</TYPE><NAME>WLC1</NAME>
+<MANAGEMENT_INTERFACE><PORT><IP>10.9.9.9</IP><SUBNET>255.0.0.0</SUBNET><PORT_GATEWAY/></PORT></MANAGEMENT_INTERFACE>
+<WLC_INTERFACES>
+ <PORT><MACADDRESS>0001.0001.0001</MACADDRESS><BIA>0001.0001.0001</BIA><IP>10.9.9.9</IP><SUBNET>255.0.0.0</SUBNET>
+  <PORT_GATEWAY/><DHCP_SERVER_IP>10.0.0.1</DHCP_SERVER_IP><NAME>management</NAME><VLAN_NUMBER>0</VLAN_NUMBER>
+  <PHYSICAL_PORT_NUMBER>1</PHYSICAL_PORT_NUMBER><DYNAMIC_AP_MANAGER_ENABLED>true</DYNAMIC_AP_MANAGER_ENABLED></PORT>
+ <PORT><IP>192.0.2.1</IP><SUBNET>255.255.255.255</SUBNET><NAME>virtual</NAME></PORT>
+ <PORT><IP>10.20.0.2</IP><SUBNET>255.255.0.0</SUBNET><NAME>vlan20</NAME><VLAN_NUMBER>20</VLAN_NUMBER></PORT>
+</WLC_INTERFACES>
+<CAPWAP_AC><PRIMARY_AC>0.0.0.0</PRIMARY_AC><WLANS><WLAN_CONFIG><NAME>old</NAME></WLAN_CONFIG></WLANS>
+ <AP_GROUPS><AP_GROUP><NAME>default-group</NAME><WLANS><WLAN><NAME>old</NAME></WLAN></WLANS></AP_GROUP></AP_GROUPS>
+ <APS><AP><MAC>0090.0C1D.B201</MAC></AP></APS><RADIUS_SERVERS/></CAPWAP_AC>
+<DHCP_SERVERS><ASSOCIATED_PORTS><ASSOCIATED_PORT><DHCP_SERVER><ENABLED>1</ENABLED><POOLS>
+ <POOL><NAME>day0-dhcp-mgmt</NAME></POOL><POOL><NAME>net10</NAME></POOL></POOLS></DHCP_SERVER></ASSOCIATED_PORT>
+</ASSOCIATED_PORTS></DHCP_SERVERS></ENGINE></DEVICE>"""
+
+
+class Controller(unittest.TestCase):
+    def wlc(self):
+        from pt_lab_builder import library
+        d = ET.fromstring(WLC_XML)
+        library.factory_reset(d, "wlc")
+        return d
+
+    def test_factory_reset_keeps_only_stock_state(self):
+        e = self.wlc().find("ENGINE")
+        self.assertEqual([p.findtext("NAME") for p in e.find("WLC_INTERFACES")], ["management", "virtual"])
+        self.assertEqual(len(e.find("CAPWAP_AC/WLANS")) + len(e.find("CAPWAP_AC/APS")), 0)
+        self.assertEqual(len(e.find("CAPWAP_AC/AP_GROUPS/AP_GROUP/WLANS")), 0)
+        self.assertEqual([p.findtext("NAME") for p in e.iter("POOL")], ["day0-dhcp-mgmt"])
+        self.assertEqual(e.findtext("WLC_INTERFACES/PORT/IP"), "")        # no address from the source lab
+
+    def test_wlan_written_and_graded_on_the_controller(self):
+        from pt_lab_builder import ptbuild
+        d = self.wlc()
+        cfg = {"management": "192.168.60.2/24", "gateway": "192.168.60.1",
+               "interfaces": [{"name": "staff", "vlan": 20, "ip": "192.168.20.2/24", "gateway": "192.168.20.1"}],
+               "wlans": [{"ssid": "Staff", "security": "wpa2-psk", "passphrase": "Passw0rd99", "interface": "staff"}]}
+        start = ET.fromstring(ET.tostring(d))
+        ptbuild.set_wlc(start, cfg, set(), "start")
+        ptbuild.set_wlc(d, cfg, set(), "answer")
+        e = d.find("ENGINE")
+        self.assertEqual((e.findtext("MANAGEMENT_INTERFACE/PORT/IP"), e.findtext("WLC_INTERFACES/PORT/SUBNET")),
+                         ("192.168.60.2", "255.255.255.0"))
+        staff = e.findall("WLC_INTERFACES/PORT")[-1]
+        self.assertEqual((staff.findtext("NAME"), staff.findtext("VLAN_NUMBER"), staff.findtext("IP")),
+                         ("staff", "20", "192.168.20.2"))
+        self.assertNotEqual(staff.findtext("MACADDRESS"), "0001.0001.0001")
+        wc = e.find("CAPWAP_AC/WLANS/WLAN_CONFIG")
+        self.assertEqual([wc.findtext(t) for t in ("SSID", "AUTHEN_TYPE", "ENCRYPT_TYPE", "VLAN", "INTERFACE_NAME")],
+                         ["Staff", "4", "4", "20", "staff"])
+        spec = {"lab": {"title": "t", "scenario": "s", "kind": "configure"},
+                "device": [{"name": "WLC1", "model": "wlc-3504"}],
+                "grade": {"items": ["wlan WLC1 Staff wpa2 Passw0rd99"]}}
+        items, checks = labgen.compile_grade(spec)
+        kinds = [i["kind"] for i in items]
+        self.assertEqual(kinds, ["wlc_ssid", "wlc_on", "wlc_auth", "wlc_enc", "wlc_key", "wlc_group"])
+        self.assertTrue(ptlab.run_check(checks[0], {"WLC1": d}))
+        self.assertFalse(ptlab.run_check(checks[0], {"WLC1": start}))     # the start network has no WLAN
+
+
 class MergeSections(unittest.TestCase):
     def test_router_id_stays_inside_router_ospf(self):
         out = labgen.merge(["version 15.1", "!", "end"], "router ospf 10\n router-id 2.2.2.2\n network 10.0.0.0 0.0.0.3 area 0\n")

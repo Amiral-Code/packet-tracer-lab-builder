@@ -298,6 +298,55 @@ def set_wireless(device, ssid, security="open", passphrase="", addressing=None):
     current.append(copy.deepcopy(profile))
 
 
+def _cidr(text):
+    ip, bits = text.split("/")
+    n = (0xFFFFFFFF << (32 - int(bits))) & 0xFFFFFFFF
+    return ip, ".".join(str(n >> s & 255) for s in (24, 16, 8, 0))
+
+
+def set_wlc(device, cfg, used_macs, which="answer"):
+    """A wireless LAN controller as Packet Tracer stores it (its own WLC samples): the management interface (address
+    in WLC_INTERFACES and MANAGEMENT_INTERFACE), dynamic interfaces (one per VLAN, a copy of the management port with
+    its own MAC), and WLANs in CAPWAP_AC, each listed in the default AP group so every joined AP offers it.
+    cfg = {management = "10.0.0.2/24", gateway, interfaces = [{name, vlan, ip, gateway, dhcp}],
+    wlans = [{ssid, name, security, passphrase, interface}]}; interfaces and WLANs go in the answer network only,
+    unless the item says in_start = true."""
+    eng = device.find("ENGINE")
+    wi = eng.find("WLC_INTERFACES")
+    mgmt = next(p for p in wi.findall("PORT") if p.findtext("NAME") == "management")
+    if cfg.get("management"):
+        ip, mask = _cidr(cfg["management"])
+        for port in (mgmt, eng.find("MANAGEMENT_INTERFACE/PORT")):
+            port.find("IP").text, port.find("SUBNET").text = ip, mask
+            port.find("PORT_GATEWAY").text = cfg.get("gateway", "")
+    keep = lambda x: which == "answer" or x.get("in_start")
+    for itf in filter(keep, cfg.get("interfaces", [])):
+        port = copy.deepcopy(mgmt)
+        ip, mask = _cidr(itf["ip"])
+        mac = new_mac(used_macs)
+        for tag, value in (("NAME", itf["name"]), ("VLAN_NUMBER", str(itf["vlan"])), ("IP", ip), ("SUBNET", mask),
+                           ("PORT_GATEWAY", itf.get("gateway", "")), ("DHCP_SERVER_IP", itf.get("dhcp", "0.0.0.0")),
+                           ("DYNAMIC_AP_MANAGER_ENABLED", "false"), ("MACADDRESS", mac), ("BIA", mac)):
+            if port.find(tag) is None:
+                ET.SubElement(port, tag)
+            port.find(tag).text = value
+        wi.append(port)
+    vlan_of = {i["name"]: str(i["vlan"]) for i in cfg.get("interfaces", [])}
+    ac = eng.find("CAPWAP_AC")
+    group = ac.find("AP_GROUPS/AP_GROUP/WLANS")
+    for n, w in enumerate(filter(keep, cfg.get("wlans", [])), 1):
+        auth, enc = WIRELESS_SECURITY[w.get("security", "wpa2-psk")]
+        itf = w.get("interface", "management")
+        wc = ET.SubElement(ac.find("WLANS"), "WLAN_CONFIG")
+        for tag, value in (("NAME", w.get("name", w["ssid"])), ("SSID", w["ssid"]), ("AUTHEN_TYPE", auth),
+                           ("ENCRYPT_TYPE", enc), ("WEP_KEY", w.get("passphrase", "")), ("RADIUS_IP", ""),
+                           ("RADIUS_PORT", "0"), ("RADIUS_SECRET", ""), ("RADIUS_SERVER_INDEX", "4294967295"),
+                           ("VLAN", vlan_of.get(itf, "0")), ("ID", str(n)), ("ENABLED", "true"),
+                           ("INTERFACE_NAME", itf), ("WLAN_SWITCH_MODE", "1"), ("WLAN_AUTHEN_MODE", "1")):
+            ET.SubElement(wc, tag).text = value
+        ET.SubElement(ET.SubElement(group, "WLAN"), "NAME").text = w.get("name", w["ssid"])
+
+
 def cloud_connections(device, pairs):
     """A Cloud's cable/DSL mapping, as Packet Tracer stores it: MODEM_CONNECTIONS pairs a coax or modem (phone) port
     with an Ethernet port; MODEM_CONNECTION_TYPES marks that Ethernet port as DSL (true) or cable (false)."""

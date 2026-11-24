@@ -219,6 +219,12 @@ def lint(spec) -> Issues:
         elif not any(serial) and cable in ("eSerialDCE", "eSerialDTE"):
             issues.error(f"link {i}: {cable} needs serial ports at both ends")
 
+    # [config] holds only start, answer and unconfigured_hosts; device text written directly under it is ignored
+    for key, value in spec.get("config", {}).items():
+        if key not in ("start", "answer", "unconfigured_hosts"):
+            issues.error(f"[config] {key}: device configuration goes under [config.start] and/or [config.answer] "
+                         "(a configure lab's start network takes only config.start; infrastructure goes in both)")
+
     # multilayer-switch ports are switchports: an IP address on a physical port needs "no switchport" first
     # (IOS and Packet Tracer reject the address otherwise, and the port's assessment items are silently dropped)
     for which in ("start", "answer"):
@@ -422,8 +428,9 @@ def _wlan_problem(w, model):
         return "write it as: wlan DEV SSID [wpa2 PASSPHRASE]"
     if len(w) == 5 and not 8 <= len(w[4]) <= 63:
         return "a WPA2 passphrase is 8 to 63 characters"
-    if model.get(w[1]) not in ("home-router", "wrt300n", "laptop", "pc", "tablet", "smartphone"):
-        return f"{w[1]} ({model.get(w[1])}) has no WLAN to grade (home router, Linksys or a wireless host)"
+    if model.get(w[1]) not in ("home-router", "wrt300n", "laptop", "pc", "tablet", "smartphone", "wlc-3504",
+                               "wlc-2504"):
+        return f"{w[1]} ({model.get(w[1])}) has no WLAN to grade (home router, Linksys, WLC or a wireless host)"
     return None
 
 

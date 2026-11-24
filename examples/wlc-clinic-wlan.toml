@@ -1,0 +1,153 @@
+[lab]
+id = "wlc-clinic-wlan"
+title = "One Controller, Every Access Point: a WLAN on a WLC"
+level = 2
+kind = "configure"
+exam = "CCNA 2.6-2.8 / 5.9 - WLC architecture, AP join, WLAN creation with WPA2 PSK"
+time = 30
+scenario = """
+The Agadir clinic replaced its standalone access point with a **wireless LAN controller**
+(WLC-3504) and a **lightweight access point**. The AP has already found the controller,
+but the controller offers no network yet, so the staff laptop sees nothing.
+
+From the admin PC, open the controller's web interface, create the staff WLAN with
+WPA2-Personal, then join the laptop to it.
+"""
+objectives = [
+  "Explain the split between a lightweight AP and its controller (CAPWAP)",
+  "Reach a WLC's web interface on its management address",
+  "Create a WLAN with WPA2-PSK and map it to an interface",
+  "Join a wireless client and verify it reaches the wired LAN",
+]
+
+[[device]]
+name = "CL-R1"
+model = "router-2911"
+x = 420
+y = 120
+[[device]]
+name = "CL-SW1"
+model = "switch-2960"
+x = 420
+y = 250
+[[device]]
+name = "CL-WLC1"
+model = "wlc-3504"
+x = 620
+y = 250
+wlc = { management = "192.168.60.2/24", gateway = "192.168.60.1", wlans = [{ ssid = "ClinicStaff", security = "wpa2-psk", passphrase = "Atlas-Clinic-60" }] }
+[[device]]
+name = "CL-AP1"
+model = "lap"
+x = 260
+y = 380
+[[device]]
+name = "ADMIN-PC"
+model = "pc"
+x = 600
+y = 400
+[[device]]
+name = "STAFF-LAPTOP"
+model = "laptop"
+x = 260
+y = 520
+wireless = { ssid = "ClinicStaff", security = "wpa2-psk", passphrase = "Atlas-Clinic-60" }
+
+[[link]]
+a = "CL-R1 G0/0"
+b = "CL-SW1 G0/1"
+[[link]]
+a = "CL-SW1 Fa0/1"
+b = "CL-AP1 G0"
+[[link]]
+a = "CL-SW1 Fa0/2"
+b = "CL-WLC1 GigabitEthernet1"
+[[link]]
+a = "CL-SW1 Fa0/3"
+b = "ADMIN-PC Fa0"
+
+[[area]]
+label = "CLINIC LAN  -  192.168.60.0/24"
+color = "blue"
+devices = ["CL-R1", "CL-SW1", "CL-WLC1", "CL-AP1", "ADMIN-PC", "STAFF-LAPTOP"]
+
+[addressing]
+rows = [
+  ["CL-R1",        "G0/0",      "192.168.60.1/24",  ""],
+  ["ADMIN-PC",     "Fa0",       "192.168.60.10/24", "192.168.60.1"],
+  ["CL-AP1",       "G0",        "dhcp",             ""],
+  ["STAFF-LAPTOP", "Wireless0", "dhcp",             ""],
+]
+
+# the clinic router hands out addresses to the AP and the wireless clients (infrastructure: in both networks)
+[config.start]
+CL-R1 = """
+ip dhcp excluded-address 192.168.60.1 192.168.60.20
+ip dhcp pool CLINIC
+ network 192.168.60.0 255.255.255.0
+ default-router 192.168.60.1
+interface G0/0
+ ip address 192.168.60.1 255.255.255.0
+ no shutdown
+"""
+
+[config.answer]
+CL-R1 = """
+ip dhcp excluded-address 192.168.60.1 192.168.60.20
+ip dhcp pool CLINIC
+ network 192.168.60.0 255.255.255.0
+ default-router 192.168.60.1
+interface G0/0
+ ip address 192.168.60.1 255.255.255.0
+ no shutdown
+"""
+
+[[part]]
+title = "Reach the controller"
+intro = "A lightweight AP has no configuration of its own: it downloads its WLANs from the controller over CAPWAP."
+steps = [
+  "On **ADMIN-PC**, open **Desktop > Web Browser** and browse to **http://192.168.60.2**.",
+  "Log in with user **admin**, password **Cisco123**.",
+  "Under **Wireless**, check that **CL-AP1** has joined the controller.",
+]
+hint = "If the page does not load, ping 192.168.60.2 from ADMIN-PC first."
+why = "Managing every AP from one controller is what makes a campus WLAN consistent: one change reaches every AP at once."
+
+[[part]]
+title = "Create the WLAN"
+intro = "Under **WLANs**, create a new WLAN and enable it."
+steps = [
+  "Profile name and SSID: **ClinicStaff**; interface: **management**.",
+  "Security: **WPA2**, **PSK**, passphrase **Atlas-Clinic-60**.",
+  "Apply, and make sure the WLAN is **Enabled**.",
+]
+hint = "Security settings are on the WLAN's Security tab (Layer 2): WPA+WPA2, WPA2 policy, AES, PSK."
+why = "The WLAN is defined once on the controller; every AP in its AP group starts broadcasting it."
+
+[[part]]
+title = "Join and verify"
+intro = "Connect the laptop like any WPA2-Personal network."
+steps = [
+  "On **STAFF-LAPTOP**, **Desktop > PC Wireless** (or **Config > Wireless0**): SSID **ClinicStaff**, WPA2-PSK, passphrase **Atlas-Clinic-60**, DHCP.",
+  "Check the laptop received a 192.168.60.x address, then ping **ADMIN-PC** (192.168.60.10).",
+  "Click **Check Results**.",
+]
+hint = "A laptop that shows the SSID but gets no address: compare the passphrase on both sides, letter for letter."
+why = "The laptop's traffic reaches the wired LAN through the AP and the controller's management interface, so a ping proves the whole wireless path."
+
+[grade]
+items = [
+  "wlan CL-WLC1 ClinicStaff wpa2 Atlas-Clinic-60",
+  "wlan STAFF-LAPTOP ClinicStaff wpa2 Atlas-Clinic-60",
+  "ping STAFF-LAPTOP ADMIN-PC",
+]
+
+debrief = """
+With a controller, the AP is only a radio: the SSID, the security and the VLAN mapping all
+live on the WLC, and the AP learns them over CAPWAP when it joins. Adding a second AP to
+this clinic needs no wireless configuration at all, only a cable and an address.
+"""
+questions = [
+  "What does a lightweight AP download from its controller when it joins?",
+  "A second floor gets three more APs. What do you have to configure on them, and why?",
+]

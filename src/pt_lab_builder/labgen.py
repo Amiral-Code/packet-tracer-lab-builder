@@ -565,6 +565,8 @@ def build_topology(spec, configs, pcs, which="answer"):
         if w and (which == "answer" or w.get("in_start")):   # the WLAN a home router offers, or a host joins
             ptbuild.set_wireless(t.devices[d["name"]], w["ssid"], w.get("security", "open"), w.get("passphrase", ""),
                                  pcs_for(spec, which).get(d["name"]))
+        if d.get("wlc"):       # a wireless LAN controller: management, dynamic interfaces, WLANs
+            ptbuild.set_wlc(t.devices[d["name"]], d["wlc"], t.macs, which)
         if d.get("connect"):   # a Cloud's cable/DSL mapping: [["Coaxial7", "Ethernet6"], ["Modem4", ...]]
             ptbuild.cloud_connections(t.devices[d["name"]], [tuple(p) for p in d["connect"]])
     cidr = {(r[0], long_if(r[1])): r[2] for r in addressing_rows(spec)}
@@ -1032,11 +1034,20 @@ def _statement(st, w, k, items, checks, spec):
         model = next((d["model"] for d in spec["device"] if d["name"] == dev), "")
         radio = "Wireless 2.4G" if model in ("home-router", "wrt300n") else "Wireless"
         secure = len(w) > 3 and w[3] == "wpa2"
-        items.append({"device": dev, "kind": "wlan_ssid", "radio": radio, "value": ssid})
-        items.append({"device": dev, "kind": "wlan_auth", "radio": radio, "value": "4" if secure else "0"})
-        if secure:
-            items.append({"device": dev, "kind": "wlan_enc", "radio": radio, "value": "4"})
-            items.append({"device": dev, "kind": "wlan_key", "radio": radio, "value": w[4]})
+        if model.startswith("wlc"):     # on a controller: the WLAN profile named after its SSID
+            items.append({"device": dev, "kind": "wlc_ssid", "wlan": ssid, "value": ssid})
+            items.append({"device": dev, "kind": "wlc_on", "wlan": ssid, "value": "1"})
+            items.append({"device": dev, "kind": "wlc_auth", "wlan": ssid, "value": "4" if secure else "0"})
+            if secure:
+                items.append({"device": dev, "kind": "wlc_enc", "wlan": ssid, "value": "4"})
+                items.append({"device": dev, "kind": "wlc_key", "wlan": ssid, "value": w[4]})
+            items.append({"device": dev, "kind": "wlc_group", "wlan": ssid, "value": ssid})
+        else:
+            items.append({"device": dev, "kind": "wlan_ssid", "radio": radio, "value": ssid})
+            items.append({"device": dev, "kind": "wlan_auth", "radio": radio, "value": "4" if secure else "0"})
+            if secure:
+                items.append({"device": dev, "kind": "wlan_enc", "radio": radio, "value": "4"})
+                items.append({"device": dev, "kind": "wlan_key", "radio": radio, "value": w[4]})
         checks.append({"device": dev, "desc": f"{dev} WLAN {ssid}" + (" (WPA2-PSK)" if secure else " (open)"),
                        "wlan": (ssid, "4" if secure else "0", w[4] if secure else None)})
     elif k == "nameif":                 # nameif ASA IFACE NAME

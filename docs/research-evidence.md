@@ -425,3 +425,37 @@ activity, Packet Tracer 8.2.0). Used only as evidence and as the source of the t
 - Proof: `structured-cabling` example, items kept 12/12 with values identical to Packet Tracer's own; live check
   0/12 -> 12/12 and 2/2 pings through wall plate and panel; answer network 12/12, 2/2.
 \n
+
+## Wireless LAN controller (2026-11-24)
+
+Sources: Packet Tracer's own samples (`saves/01 Networking/Wireless/Wireless LAN/WLC/*.pkt`, e.g.
+`wlc_3504_simple_wlan.pkt`, PT 7.3) and NetAcad's 1.1.6 wireless activity (alexnkoma/Packet-tracer-labs, PT 8.2).
+
+- WLC data ports count from 1 (`GigabitEthernet1`, in every sample link); the sample cables WLC to switch with a
+  crossover. A lightweight AP takes its address by DHCP and joins a WLC on its subnet by itself.
+- XML: management address in `WLC_INTERFACES/PORT[NAME=management]` and `MANAGEMENT_INTERFACE/PORT`; dynamic
+  interfaces are further `WLC_INTERFACES` ports (NAME, VLAN_NUMBER, IP, SUBNET, PORT_GATEWAY, DHCP_SERVER_IP);
+  WLANs in `CAPWAP_AC/WLANS/WLAN_CONFIG` (SSID, AUTHEN_TYPE 4 / ENCRYPT_TYPE 4 = WPA2/AES, WEP_KEY = passphrase,
+  VLAN, INTERFACE_NAME, ENABLED), listed in `AP_GROUPS/AP_GROUP[default-group]/WLANS`; joined APs in `APS` by MAC.
+  An AP keeps the WLANs it learned in `CAPWAP/WLANS`.
+- Templates carry their sample's state (WLANs, joined APs, dynamic interfaces, DHCP pools such as `net10`): reset.
+  Packet Tracer reports the WLC's DHCP server enabled whatever `ENABLED` says; only the factory pool
+  `day0-dhcp-mgmt` (192.168.1.0/28) is kept.
+- Packet Tracer's own graded tree (bare save): `WLC > CAPWAP Wireless > Wireless LANs > PROFILE > SSID / Enabled /
+  VLAN / Central Authentication / Central Switching / Security Mode > Authen Type / WEP Key / PassPhrase ("Pass
+  Phrase") / Encryption Type`, `AP Groups > default-group > WLANs > PROFILE`, plus ports (management, virtual,
+  Vlan1) and DHCP pools. NetAcad's 1.1.6 grades only the client side.
+- Proof (`wlc-clinic-wlan`): items kept 10/10, values identical to Packet Tracer's own; Packet Tracer scores the
+  start network 0/10. Answer network live: the AP joined the WLC (its MAC in `APS`, the WLAN in its CAPWAP copy), the
+  laptop associated with WPA2-PSK, leased an address and pinged the admin PC: 10/10, 1/1. The first runs failed:
+  the router's DHCP pool was written under `[config]`, which is ignored (now a lint error), and the laptop's first
+  DHCP request went out before the AP had joined (answer mode now asks again after settling; WLC labs settle 90 s).
+  Solve mode reaches 4/10: the WLC is configured in its web GUI, which the script API cannot drive.
+
+## Variable Manager and scoring scripts (2026-11-24)
+
+NetAcad's 1.1.4 and 1.1.6 activities: the Variable Manager holds one IP pool (`VLAN20Adds`, any address of
+192.168.20.0/25) for an "any address in the subnet" answer, which `{{RegEx:}}` items already give; the script modules
+are the stock framework (EventManager, Main, ProficiencyModel, ScoringModels, VariableManager), no custom scoring.
+Not implemented: per-student variants and per-part scores cover the same needs.
+

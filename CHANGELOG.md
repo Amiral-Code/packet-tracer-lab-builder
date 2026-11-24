@@ -6,6 +6,12 @@
   punch-downs, and each run graded with Packet Tracer's own "Link to PEER > Connects to PORT" item, the way
   NetAcad's structured-cabling activity grades it. New example and recipe `structured-cabling`, proven live
   (0/12 -> 12/12, pings 2/2; answer network 12/12).
+- Wireless LAN controllers: `wlc-3504` / `wlc-2504` with lightweight APs, `wlc = {...}` (management address,
+  dynamic interfaces, WLANs in Packet Tracer's own format) and `wlan WLC SSID wpa2 KEY` graded with the native
+  `CAPWAP Wireless` items. Templates are reset to factory state (no sample WLANs, joined APs, interfaces or DHCP
+  pools; an AP forgets the WLANs it learned). New example and recipe `wlc-clinic-wlan`.
+- Lint: device configuration written directly under `[config]` (ignored before, silently) is an error.
+- Live check, answer mode: DHCP clients ask again once the network has settled; WLC labs wait 90 s for the AP.
 - `ptlab init --extra-source DIR`: a folder whose files only add device models the regular sources lack (a
   downloaded sample cannot replace a proven template).
 

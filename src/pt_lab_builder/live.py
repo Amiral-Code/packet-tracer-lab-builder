@@ -214,6 +214,8 @@ def plan(spec, result_path, save_path=None):
         (60_000 if labgen.needs_convergence(spec) else 20_000)
     if labgen.needs_convergence(spec):            # OSPF adjacencies, spanning tree on re-configured ports
         settle = max(settle, 90_000)
+    if any(str(d.get("model", "")).startswith("wlc") for d in spec["device"]):
+        settle = max(settle, 90_000)              # a lightweight AP boots, leases an address and joins over CAPWAP
     dhcp_ms = 45_000 if any(h["dhcp"] for h in hosts.values()) else 0
     wireless = {}
     for d in spec["device"]:
@@ -287,7 +289,11 @@ def instrument(spec, built, out_pka, result_path, save_path=None, answer=False):
         at = list(root).index(nets[0])
         root.remove(nets[0])
         root.insert(at, copy.deepcopy(nets[-1]))
-        p.update({"links": [], "configs": {}, "hosts": {}, "wireless": {}, "dhcp_ms": 0, "mode": "answer"})
+        # nothing is typed or set, except that DHCP clients ask again once the network has settled, as a student
+        # clicks DHCP again (a wireless client's first request goes out before its AP has joined the WLC)
+        dhcp = {h: s for h, s in p["hosts"].items() if s["dhcp"]}
+        p.update({"links": [], "configs": {}, "hosts": dhcp, "wireless": {}, "dhcp_ms": 45_000 if dhcp else 0,
+                  "mode": "answer"})
     script = SCRIPT.replace("__PLAN__", json.dumps(p))
     s = ET.SubElement(sm.find("SCRIPTS"), "SCRIPT")
     ET.SubElement(s, "ID").text = "LiveCheck.js"
