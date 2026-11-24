@@ -298,6 +298,15 @@ def load_spec(path):
     for key in ("debrief", "questions"):  # usually written under [grade], where TOML files them
         if key not in s and key in s.get("grade", {}):
             s[key] = s["grade"][key]
+    # statements graded per part: Check Results reports each part as its own component ("Hardening 4/6"),
+    # as NetAcad activities do ("Device Hardening Configuration", "VLAN Config")
+    s["_part_of"] = {}
+    for part in s.get("part", []):
+        for st in part.get("grade", []):
+            items = s.setdefault("grade", {}).setdefault("items", [])
+            if st not in items:
+                items.append(st)
+            s["_part_of"][st] = part.get("title", "Part")
     return s
 
 
@@ -827,6 +836,8 @@ def compile_grade(spec):
             for it in items[first:]:
                 if st in points:
                     it["points"] = points[st]
+                if st in spec.get("_part_of", {}):
+                    it["component"] = spec["_part_of"][st]
                 if st in overrides:
                     it["hint"] = overrides[st]
                 else:

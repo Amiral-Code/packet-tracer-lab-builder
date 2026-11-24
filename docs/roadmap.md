@@ -141,9 +141,11 @@ Live-confirmed 2026-11-23 (`feature-probe-2.pka`, Check Results **40/40**, Conne
 
 ## Iteration 6: partial credit and better feedback
 
-- The scoring model (work products, observables, reporting variables) for capstones: per-part scores and messages
-  such as "two of three sites route correctly".
-- Per-part progress shown in the activity window.
+- ~~**Per-part scores**~~ a `[[part]]` may carry `grade = [...]`: its items are filed under the part's title, which
+  joins `COMPONENT_LIST`, so Check Results scores each part ("Hardening 9/14"), as NetAcad activities name their
+  components after tasks ("Device Hardening Configuration", "VLAN Config"). `feature-probe-2` uses it.
+- The scripted scoring model (work products, observables, reporting variables) and messages such as "two of three
+  sites route correctly" (open: needs the activity's Main.js/ScoringModels.js scripts, seen in 83 user files).
 
 ## Iteration 7: physical realism
 
@@ -153,8 +155,10 @@ Live-confirmed 2026-11-23 (`feature-probe-2.pka`, Check Results **40/40**, Conne
 
 ## Iteration 8: beyond Packet Tracer
 
-- The same spec format compiled to GNS3/CML for what Packet Tracer cannot do (MPLS, VRF, IS-IS, BGP policy,
-  multicast, DMVPN), reusing the CCNA GNS3 engine; the skill routes these automatically.
+- ~~**`ptlab gns3 SPEC OUT`**~~ compiles a spec into a lab for the author's CCNA GNS3 engine (IOU routers/switches,
+  VPCS): ports renamed in link order, base and solution configs, grade statements as show-command checks (the
+  rest listed in the file). The exported static-two-sites passes the engine's selftest (8/8 failing before, 8/8
+  passing after the solution). Open: serial links, and topics only GNS3/CML can run (MPLS, VRF, IS-IS, BGP policy).
 
 ## Iteration 9: release
 

@@ -87,6 +87,9 @@ def parser() -> argparse.ArgumentParser:
     ts.add_argument("output", type=Path)
     ts.add_argument("--faults", type=int, default=3)
     ts.add_argument("--seed", default="faults")
+    gx = sub.add_parser("gns3", help="compile a spec into a GNS3 lab for the CCNA engine (IOU + VPCS)")
+    gx.add_argument("spec", type=Path)
+    gx.add_argument("output", type=Path)
     gr = sub.add_parser("grade", help="grade every saved .pka in a folder into grades.csv and grades.html")
     gr.add_argument("spec", type=Path, help="the lab spec, or a folder of its variant specs")
     gr.add_argument("folder", type=Path, help="folder of saved student .pka files")
@@ -190,6 +193,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"fault on {f['device']}: {f['symptom']}")
         print(f"wrote {args.output} with {len(chosen)} fault(s); check it with `ptlab lint {args.output}`")
         return 0 if chosen else 1
+    if args.command == "gns3":
+        from . import gns3export
+        try:
+            text = gns3export.export(labgen.load_spec(str(args.spec)))
+        except ValueError as e:
+            raise SystemExit(f"ptlab gns3: {e}")
+        args.output.write_text(text, encoding="utf-8")
+        print(f"wrote {args.output}")
+        return 0
     if args.command == "grade":
         from . import grading
         rows = grading.grade_dir(args.spec, args.folder)

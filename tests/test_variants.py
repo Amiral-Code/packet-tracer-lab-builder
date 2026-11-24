@@ -64,5 +64,20 @@ class GradeReportTests(unittest.TestCase):
             self.assertIn("1/2 students", open(html_path).read())
 
 
+class PartComponentTests(unittest.TestCase):
+    def test_statements_under_a_part_are_graded_as_that_part(self):
+        import tempfile, os
+        from pt_lab_builder import labgen
+        spec = '[lab]\nid = "p"\ntitle = "P"\nscenario = "s"\n[[device]]\nname = "PC1"\nmodel = "pc"\n' \
+               '[[part]]\ntitle = "Hosts"\nsteps = ["x"]\ngrade = ["gw PC1 10.0.0.1"]\n[grade]\nitems = []\n'
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "p.toml")
+            open(path, "w").write(spec)
+            s = labgen.load_spec(path)
+        self.assertEqual(s["grade"]["items"], ["gw PC1 10.0.0.1"])
+        items, _ = labgen.compile_grade(s)
+        self.assertEqual({it["component"] for it in items}, {"Hosts"})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -421,6 +421,7 @@ def comparisons(items):
     line_no = {}
     for it in items:
         path, name, nid, eclass, comp = PKA_KINDS[it["kind"]]
+        comp = it.get("component") or comp          # a lab part ("Hardening") instead of the generic class
         nid = nid.format(**it)
         cur = _child(root, it["device"])
         for part in path:
@@ -701,7 +702,8 @@ def build_pka(a, start_tree, answer_tree):
     ET.SubElement(act, "DYNAMIC_PERCENTAGE_FEEDBACK", {"TYPE": "1"}).text = "true"
     ET.SubElement(act, "USER_PROFILE_LOCKED").text = "true" if settings.get("profile_locked", False) else "false"
     ET.SubElement(act, "USER_PROFILE_NOGUEST").text = "false"
-    ET.SubElement(act, "COMPONENT_LIST").text = "Other, Physical, Ip, Routing, Switching"
+    parts = [c for c in dict.fromkeys(it.get("component") for it in a.get("pka_item", [])) if c]
+    ET.SubElement(act, "COMPONENT_LIST").text = ", ".join(["Other", "Physical", "Ip", "Routing", "Switching"] + parts)
     ET.SubElement(act, "CLEAN_ACTIVITY").text = "false"
     sm = start_tree.getroot().find("SCRIPT_MODULE")
     act.append(copy.deepcopy(sm) if sm is not None else ET.Element("SCRIPT_MODULE"))

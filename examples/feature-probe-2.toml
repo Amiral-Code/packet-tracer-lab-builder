@@ -152,6 +152,15 @@ steps = [
 hint = "Link-local addresses are set per interface with `ipv6 address FE80::1 link-local`."
 why = "A memorable link-local gateway survives renumbering of the global prefix."
 
+grade = [
+  "ip6 R1 G0/0 2001:db8:10::1/64",
+  "ip6 R1 G0/1 2001:db8:99::1/64",
+  'in R1 "interface G0/0" "ipv6 address FE80::1 link-local"',
+  "route6 R1 2001:db8:200::/64 2001:db8:99::10",
+  "ip6 PC2 Fa0 2001:db8:10::20/64",
+  "gw6 PC2 FE80::1",
+  "ping6 PC2 SRV1",
+]
 [[part]]
 title = "Users: DHCP, gateway, translation"
 intro = "Users get addresses from R1, a virtual gateway that can later move to a second router, and PAT towards the provider."
@@ -166,6 +175,17 @@ steps = [
 hint = "PAT needs three things: inside/outside on the interfaces, an ACL for who is translated, and `ip nat inside source list 1 interface G0/1 overload`."
 why = "Grading accepts any address in the subnet and either gateway, because a real network accepts both."
 
+grade = [
+  "pool R1 LAN 192.168.10.0/24 gw 192.168.10.254 dns 203.0.113.10",
+  "hsrp R1 G0/0 1 192.168.10.254 priority 110 preempt",
+  "ip PC1 Fa0 in 192.168.10.0/24",
+  "gw PC1 192.168.10.1|192.168.10.254",
+  "nat R1 G0/0 inside",
+  "nat R1 G0/1 outside",
+  "line R1 ip nat inside source list 1 interface GigabitEthernet0/1 overload",
+  "desc R1 G0/0 ~lan",
+  "ping PC1 SRV1",
+]
 [[part]]
 title = "Hardening"
 intro = "Lock the router and the user ports down."
@@ -180,22 +200,7 @@ steps = [
 hint = "A passive interface still has its network advertised; it just sends no hellos."
 why = "Each of these closes a common gap: guessable privilege passwords, rogue OSPF neighbours on the user LAN, and MAC flooding."
 
-[grade]
-items = [
-  "ip6 R1 G0/0 2001:db8:10::1/64",
-  "ip6 R1 G0/1 2001:db8:99::1/64",
-  'in R1 "interface G0/0" "ipv6 address FE80::1 link-local"',
-  "route6 R1 2001:db8:200::/64 2001:db8:99::10",
-  "ip6 PC2 Fa0 2001:db8:10::20/64",
-  "gw6 PC2 FE80::1",
-  "pool R1 LAN 192.168.10.0/24 gw 192.168.10.254 dns 203.0.113.10",
-  "hsrp R1 G0/0 1 192.168.10.254 priority 110 preempt",
-  "ip PC1 Fa0 in 192.168.10.0/24",
-  "gw PC1 192.168.10.1|192.168.10.254",
-  "nat R1 G0/0 inside",
-  "nat R1 G0/1 outside",
-  "line R1 ip nat inside source list 1 interface GigabitEthernet0/1 overload",
-  "desc R1 G0/0 ~lan",
+grade = [
   "secret R1 class",
   "user R1 admin Adm1nPass",
   "banner R1 ~authorized",
@@ -206,9 +211,8 @@ items = [
   "portsec SW1 Fa0/2 violation protect",
   "portfast SW1 Fa0/1",
   "portfast SW1 Fa0/2",
-  "ping PC1 SRV1",
-  "ping6 PC2 SRV1",
 ]
+[grade]
 
 debrief = """
 Several items here accept more than one right answer: PC1 may use any address in its subnet and either the

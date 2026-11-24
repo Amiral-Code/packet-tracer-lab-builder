@@ -45,6 +45,9 @@ host's addressing from the table (`["LAPTOP", "Wireless0", "dhcp", ""]`). Writte
 2.4G` / `Wireless` nodes: SSID, Authen Type 4 = WPA2-PSK, Encryption Type 4 = AES, Pass Phrase) and a ping from
 the wireless host. Live-check wireless labs with `--answer`: Packet Tracer 9's API cannot join a client.
 
+Per-part scores: a `[[part]]` may list its own `grade = [...]` statements; Check Results then shows a score per part
+(the part title is the items' component). Statements under parts are added to the lab's grading automatically.
+
 Interface cards: `modules = ["HWIC-2T"]` on a router fits cards into its empty slots, in slot order (copies of
 real cards from the user's files; `ptlab init` lists each card and the chassis it was seen in, the only ones it may
 go into). Ports are named by bay: 1841/1941/2911 HWIC slot n gives `Serial0/n/x`, ISR4321/4331 NIM bay n gives
