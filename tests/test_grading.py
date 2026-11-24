@@ -290,6 +290,28 @@ class Cabling(unittest.TestCase):
         self.assertEqual(self.grade(wrong)[1], [False])
 
 
+class StructuredCabling(unittest.TestCase):
+    def test_runs_are_graded_jack_by_jack_from_the_panel_side(self):
+        spec = {"lab": {"title": "t", "scenario": "s", "kind": "configure"},
+                "device": [{"name": "SW1", "model": "switch-2960"}, {"name": "PP1", "model": "patch-panel"},
+                           {"name": "WM1", "model": "wall-mount"}, {"name": "PC1", "model": "pc"}],
+                "link": [{"a": "PC1 Fa0", "b": "WM1 Jack1", "student": True},
+                         {"a": "WM1 PunchDown1", "b": "PP1 PunchDown3", "student": True},
+                         {"a": "SW1 Fa0/3", "b": "PP1 Jack3", "student": True}],
+                "grade": {"items": []}}
+        items, _ = labgen.compile_grade(spec)
+        got = [(i["device"], i["kind"], i.get("port"), i.get("value")) for i in items]
+        self.assertIn(("WM1", "link_to", "Jack1", "Connects to FastEthernet0"), got)
+        self.assertIn(("PP1", "link_to", "PunchDown3", "Connects to PunchDown1"), got)
+        self.assertIn(("PP1", "link_to", "Jack3", "Connects to FastEthernet0/3"), got)
+        self.assertIn(("SW1", "port_on", "FastEthernet0/3", None), got)
+        self.assertFalse([g for g in got if g[1] == "port_on" and g[0] in ("PP1", "WM1")])
+        node = ptlab.comparisons([i for i in items if i["kind"] == "link_to"][:1])
+        leaf = [n for n in node.iter("NODE") if n.find("NAME").get("checkType") == "2"][0]
+        self.assertEqual((leaf.findtext("ID"), leaf.find("NAME").get("nodeValue")),
+                         ("Connects to FastEthernet0", "Connects to FastEthernet0"))
+
+
 class MergeSections(unittest.TestCase):
     def test_router_id_stays_inside_router_ospf(self):
         out = labgen.merge(["version 15.1", "!", "end"], "router ospf 10\n router-id 2.2.2.2\n network 10.0.0.0 0.0.0.3 area 0\n")

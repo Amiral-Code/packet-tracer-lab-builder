@@ -423,6 +423,8 @@ def ptbuild_model_is_host(model):
     return model in ("pc", "server", "laptop", "printer", "tablet", "smartphone")
 
 
+# structured cabling: passive, no link light of their own (NetAcad grades their runs with Link-to items)
+PASSIVE_MODELS = ("patch-panel", "wall-mount")
 IOS_TYPES = ("Router", "Switch", "MultiLayerSwitch", "ASA")   # devices configured with CLI text
 # home and provider gear: always a straight-through copper cable (as in the user's files and Packet Tracer's samples)
 HOME_MODELS = ("home-router", "wrt300n", "cable-modem", "dsl-modem", "cloud", "central-office")
@@ -463,8 +465,8 @@ def cable_for(ma, mb, pa, pb):
         return "ePhoneLine"
     if "fiber" in media:
         return "eSingleMode" if ma in SINGLE_MODE and mb in SINGLE_MODE else "eMultiMode"
-    if ma in HOME_MODELS or mb in HOME_MODELS:
-        return "eStraightThrough"
+    if ma in HOME_MODELS or mb in HOME_MODELS or ma in PASSIVE_MODELS or mb in PASSIVE_MODELS:
+        return "eStraightThrough"      # every run to a patch panel or wall mount is straight-through
     host = ("pc", "server", "laptop", "printer", "ipphone-7960", "ap", "ap-n", "ap-ac", "lap", "lap-3702i")
     cls = lambda m: "host" if m in host else "router" if m.startswith(("router", "asa")) else "switch"
     a, b = cls(ma), cls(mb)
@@ -1186,9 +1188,22 @@ def _cable_item(items, checks, spec, a, pa, b, pb):
          (lk["b"].split(None, 1)[0], long_if(lk["b"].split(None, 1)[1]))}) == frozenset({(a, pa), (b, pb)})), {})
     want = link.get("cable") or (cable_for(models[a], models[b], pa, pb) if a in models and b in models else None)
     for dev, port in ((a, pa), (b, pb)):
-        if not ptbuild_model_is_host(models.get(dev, "")):
+        if not ptbuild_model_is_host(models.get(dev, "")) and models.get(dev) not in PASSIVE_MODELS:
             items.append({"device": dev, "kind": "port_on", "port": port,
                           "hint": default_hint(["cable", dev], {"kind": "port_on", "port": port})})
+    # a run through structured cabling: no link light proves which jack or punch-down was used, so grade the
+    # exact run with Packet Tracer's own "Link to PEER > Connects to PEERPORT" item, from the patch panel's side
+    # (then the wall mount's), as NetAcad's structured-cabling activity does
+    rank = {"patch-panel": 0, "wall-mount": 1}
+    ends = sorted(((dev, port) for dev, port in ((a, pa), (b, pb)) if models.get(dev) in rank),
+                  key=lambda e: rank[models[e[0]]])
+    if ends:
+        (dev, port), = ends[:1]
+        peer, peer_port = (b, pb) if dev == a else (a, pa)
+        items.append({"device": dev, "kind": "link_to", "port": port, "peer": peer, "peer_port": peer_port,
+                      "value": f"Connects to {peer_port}",
+                      "hint": f"Is {dev} {port} cabled to {peer} {short_if(peer_port)}? "
+                              "Follow the run in the Physical view."})
     checks.append({"device": a, "desc": f"cable {a} {short_if(pa)} - {b} {short_if(pb)}"
                    + (f" ({want.removeprefix('e')})" if want else ""), "cable": (a, pa, b, pb), "cable_type": want})
 

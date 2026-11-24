@@ -60,6 +60,14 @@ these optics (a link read as multimode stays down on them); `cable = "eSingleMod
 Access points `ap` (AccessPoint-PT), `ap-n`, `ap-ac` (Ethernet `Port 0`) and lightweight `lap`, `lap-3702i`
 (`GigabitEthernet0`) take a straight-through cable to a switch.
 
+Structured cabling: `patch-panel` (Copper Patch Panel: `Jack1`-`Jack24` at the front, `PunchDown1`-`PunchDown24` at
+the back) and `wall-mount` (Copper Wall Mount: `Jack1`-`Jack4`, `PunchDown1`-`PunchDown4`). Put the panel in the
+rack and wall mounts in the office (`physical = "building"`). Every run is straight-through: switch port to panel
+jack, panel punch-down to wall-mount punch-down, wall-mount jack to host. A student link that touches either is
+graded jack by jack with Packet Tracer's own "Link to PEER > Connects to PORT" item (from the panel's side), so a
+run on the wrong jack fails even when ping works. Example: `structured-cabling`. (Requires the two templates in the
+library: `ptlab init ... --extra-source DIR` with a file that has them, e.g. NetAcad's structured-cabling activity.)
+
 ASA firewalls: `asa-5506x` (`G1/1`-`G1/8`, `Management1/1`) and `asa-5505` (`E0/0`-`E0/7`). Their `[config]` is ASA
 CLI (`nameif`, `security-level`, `route outside ...`, `object network`, `access-group ... interface ...`); every
 port starts shut down, so used ports need `no shutdown`. Packet Tracer's tree for an ASA has **no running-config

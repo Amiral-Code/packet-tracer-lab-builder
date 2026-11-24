@@ -1,12 +1,13 @@
 # Example gallery
 
-Twelve labs ship with the builder (and as `ptlab recipes`). Each one passes the spec check and self-check, Packet
+Thirteen labs ship with the builder (and as `ptlab recipes`). Each one passes the spec check and self-check, Packet
 Tracer's own round trip with every value identical to Packet Tracer's, and the live check: Packet Tracer solves it
 from the start state to full marks and every connectivity test, and its answer network passes on its own.
 
 | Recipe | Example | Level | Kind | Time | What the student does |
 |---|---|---|---|---|---|
 | cabling-physical | `branch-cabling` | 1 | mixed | 25 min | patch a branch in the Physical view: straight-through vs crossover |
+| structured-cabling | `structured-cabling` | 1 | configure | 25 min | run desks to the switch through wall plates and a patch panel, jack by jack |
 | soho-cable-internet | `home-cable-internet` | 1 | configure | 25 min | cable a home to an ISP over coax, finish the provider's DHCP |
 | soho-wlan-wpa2 | `home-wlan-security` | 1 | configure | 20 min | rename and secure a home WLAN with WPA2-PSK, rejoin a laptop |
 | static-routing | `static-two-sites` | 2 | configure | 30 min | address two sites, static and default routes |

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Structured cabling: copper patch panels and wall mounts (`patch-panel`, `wall-mount`), their jacks and
+  punch-downs, and each run graded with Packet Tracer's own "Link to PEER > Connects to PORT" item, the way
+  NetAcad's structured-cabling activity grades it. New example and recipe `structured-cabling`, proven live
+  (0/12 -> 12/12, pings 2/2; answer network 12/12).
+- `ptlab init --extra-source DIR`: a folder whose files only add device models the regular sources lack (a
+  downloaded sample cannot replace a proven template).
+
 ## 0.2.0 (2026-11-24)
 
 Every example in this release is proven three ways: `ptlab lint` (spec check and self-check), Packet Tracer's own

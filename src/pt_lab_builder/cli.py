@@ -37,6 +37,8 @@ def parser() -> argparse.ArgumentParser:
     init = sub.add_parser("init", help="build the local codec and device/activity template library")
     init.add_argument("--source", action="append", default=[], metavar="PATH",
                       help="folder containing legally obtained .pkt/.pka files; repeatable")
+    init.add_argument("--extra-source", action="append", default=[], metavar="PATH",
+                      help="folder whose files only add device models no --source has (e.g. a downloaded sample)")
     init.add_argument("--build-codec", action="store_true", help="compile ptcrypt for this computer")
     build = sub.add_parser("build", help="build a .pka and answer guide")
     build.add_argument("spec", type=Path)
@@ -110,7 +112,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.build_codec:
             print(f"built codec: {build_codec()}")
         if args.source:
-            library.build([Path(source).expanduser().resolve() for source in args.source])
+            library.build([Path(source).expanduser().resolve() for source in args.source],
+                          extra_sources=[Path(x).expanduser().resolve() for x in args.extra_source])
         if not args.build_codec and not args.source:
             raise SystemExit("ptlab init: pass --build-codec and/or at least one --source PATH")
         return doctor()

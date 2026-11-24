@@ -1,0 +1,169 @@
+[lab]
+id = "structured-cabling"
+title = "Wall to Rack: Structured Cabling for a New Office"
+level = 1
+kind = "configure"
+exam = "CCNA 1.3 - physical interface and cabling types"
+time = 25
+scenario = """
+The Agadir sales office is moving into a new floor. The switch and the patch panel are
+already in the rack in the wiring closet, and two wall plates are fitted in the office,
+but no cable has been run yet.
+
+Do it the way an installer would: from each desk to its **wall plate**, behind the wall
+to the **patch panel's punch-downs**, and from the **patch panel's front jacks** to the
+switch. Follow the cabling plan exactly: the jack numbers are the documentation.
+"""
+objectives = [
+  "Tell the parts of a structured cabling run apart: wall plate, horizontal run, patch panel, patch cord",
+  "Follow a cabling plan port by port in the Physical workspace",
+  "Verify an end-to-end run with link lights and ping",
+]
+
+[[site]]
+name = "Agadir"
+city = "Agadir"
+building = "Agadir Sales Office"
+closet = "Sales Wiring Closet"
+rack = "Rack 1"
+devices = ["SALES-SW1", "SALES-PP1", "WALL-A", "WALL-B", "SALES-PC1", "SALES-PC2", "SALES-PRN"]
+
+[[device]]
+name = "SALES-SW1"
+model = "switch-2960"
+x = 420
+y = 140
+[[device]]
+name = "SALES-PP1"
+model = "patch-panel"
+x = 420
+y = 260
+[[device]]
+name = "WALL-A"
+model = "wall-mount"
+x = 260
+y = 380
+physical = "building"
+[[device]]
+name = "WALL-B"
+model = "wall-mount"
+x = 580
+y = 380
+physical = "building"
+[[device]]
+name = "SALES-PC1"
+model = "pc"
+x = 200
+y = 500
+physical = "building"
+[[device]]
+name = "SALES-PRN"
+model = "pc"
+x = 330
+y = 500
+physical = "building"
+[[device]]
+name = "SALES-PC2"
+model = "pc"
+x = 580
+y = 500
+physical = "building"
+
+# every run is the student's job
+[[link]]
+a = "SALES-PC1 Fa0"
+b = "WALL-A Jack1"
+student = true
+[[link]]
+a = "SALES-PRN Fa0"
+b = "WALL-A Jack2"
+student = true
+[[link]]
+a = "SALES-PC2 Fa0"
+b = "WALL-B Jack1"
+student = true
+[[link]]
+a = "WALL-A PunchDown1"
+b = "SALES-PP1 PunchDown1"
+student = true
+[[link]]
+a = "WALL-A PunchDown2"
+b = "SALES-PP1 PunchDown2"
+student = true
+[[link]]
+a = "WALL-B PunchDown1"
+b = "SALES-PP1 PunchDown5"
+student = true
+[[link]]
+a = "SALES-PP1 Jack1"
+b = "SALES-SW1 Fa0/1"
+student = true
+[[link]]
+a = "SALES-PP1 Jack2"
+b = "SALES-SW1 Fa0/2"
+student = true
+[[link]]
+a = "SALES-PP1 Jack5"
+b = "SALES-SW1 Fa0/5"
+student = true
+
+[[area]]
+label = "SALES LAN  -  172.20.10.0/24"
+color = "yellow"
+devices = ["SALES-SW1", "SALES-PP1", "WALL-A", "WALL-B", "SALES-PC1", "SALES-PC2", "SALES-PRN"]
+
+[addressing]
+rows = [
+  ["SALES-PC1", "Fa0", "172.20.10.11/24", ""],
+  ["SALES-PRN", "Fa0", "172.20.10.50/24", ""],
+  ["SALES-PC2", "Fa0", "172.20.10.12/24", ""],
+]
+
+[[part]]
+title = "Find the equipment"
+intro = "Switch to the Physical view and drill down: Agadir, then Agadir Sales Office."
+steps = [
+  "In the office: the wall plates **WALL-A** and **WALL-B**, two PCs and the printer station.",
+  "Open **Sales Wiring Closet** and **Rack 1**: the switch **SALES-SW1** and the patch panel **SALES-PP1**.",
+  "A wall plate and a patch panel each have **jacks** (front, for patch cords) and **punch-downs** (back, for the run inside the wall).",
+]
+hint = "Back out one level with the navigation arrow at the top left of the Physical view."
+why = "A structured cabling system is permanent: the runs behind the walls stay, only the short patch cords at each end are moved."
+
+[[part]]
+title = "Run the cables"
+intro = "Copper straight-through for every run. Follow the plan port for port."
+steps = [
+  "Desks to wall plates: SALES-PC1 to **WALL-A Jack1**, SALES-PRN to **WALL-A Jack2**, SALES-PC2 to **WALL-B Jack1**.",
+  "Horizontal runs: WALL-A **PunchDown1** and **PunchDown2** to SALES-PP1 **PunchDown1** and **PunchDown2**; WALL-B **PunchDown1** to SALES-PP1 **PunchDown5**.",
+  "Patch cords in the rack: SALES-PP1 **Jack1**, **Jack2** and **Jack5** to SALES-SW1 **Fa0/1**, **Fa0/2** and **Fa0/5**.",
+]
+hint = "Patch-panel jack N is wired to punch-down N behind it, so the number follows the run from the desk to the switch port. Draw long runs in the Logical view if the Physical view is crowded."
+why = "Matching numbers (desk jack, panel position, switch port) are what let a technician trace a fault years later without opening a wall."
+
+[[part]]
+title = "Verify"
+intro = "Switch link lights turn amber, then green once spanning tree lets the port forward."
+steps = [
+  "From SALES-PC1, ping SALES-PC2 (172.20.10.12) and the printer station (172.20.10.50).",
+  "Click **Check Results**: every run is checked jack by jack.",
+]
+hint = "A run that ends on the right device but the wrong jack still passes traffic; Check Results tells you it breaks the plan."
+why = "Ping proves the run works; the plan check proves it is documented correctly, which is what makes it maintainable."
+
+[grade]
+items = [
+  "ping SALES-PC1 SALES-PC2",
+  "ping SALES-PC2 SALES-PRN",
+]
+
+debrief = """
+Through the patch panel and wall plate a PC still reaches the switch on one
+straight-through path: passive cabling adds no hops and no addresses. What it adds is
+order: fixed runs, numbered positions, and short patch cords that are the only thing you
+ever move.
+"""
+questions = [
+  "Why are the horizontal runs punched down at both ends instead of ending in plugs?",
+  "SALES-PC2 pings fine but Check Results marks its run wrong. What did the installer most likely do?",
+]

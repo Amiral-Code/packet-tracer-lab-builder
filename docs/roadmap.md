@@ -149,7 +149,8 @@ Live-confirmed 2026-11-23 (`feature-probe-2.pka`, Check Results **40/40**, Conne
 
 ## Iteration 7: physical realism
 
-- Structured cabling: patch panels and wall mounts, horizontal cabling, patching labs.
+- ~~Structured cabling: patch panels and wall mounts, horizontal cabling, patching labs.~~ Done 2026-11-24
+  (`structured-cabling`, proven live).
 - Several closets per building, generic containers, background images.
 - Cable colours and bend points for tidy generated racks.
 
@@ -168,8 +169,7 @@ Live-confirmed 2026-11-23 (`feature-probe-2.pka`, Check Results **40/40**, Conne
 
 ## Still open (needs a sample file or a person)
 
-- Structured cabling (patch panels, wall mounts) and cable bend points: neither the user's files nor Packet
-  Tracer's samples contain one; a file saved with them would show the format.
+- Cable bend points: none of the files seen has one (NetAcad's structured-cabling activity included).
 - WLC-based WLANs (formats seen in the user's files: WLANs, RADIUS servers, dynamic interfaces).
 - Variable Manager pools inside one file (variants cover the need with one file per student).
 - The scripted scoring model (Main.js / ScoringModels.js) for messages beyond per-part scores.

@@ -407,3 +407,21 @@ What the live check found that no file-level check could:
 - `ptlab gns3` export of static-two-sites: the CCNA GNS3 engine's selftest passes (8/8 failing before, 8/8 passing
   after the solution, no broadcast storm).
 
+
+
+## Structured cabling (2026-11-24)
+
+Source: the public repository alexnkoma/Packet-tracer-labs, file `1.1.4...structured-cabling...rack.pka` (NetAcad
+activity, Packet Tracer 8.2.0). Used only as evidence and as the source of the two device templates (via
+`--extra-source`); nothing of its content is copied into the examples.
+
+- Devices: TYPE `Patch Panel` model `Copper Patch Panel` (48 ports: `Jack1-24`, `PunchDown1-24`), TYPE `Wall Mount`
+  model `Copper Wall Mount` (`Jack1-4`, `PunchDown1-4`), all ports `eCopperFastEthernet`; no IOS, no config.
+- Runs: every cable is copper straight-through (`eCopper` / `eStraightThrough`): switch port to panel jack, panel
+  punch-down to wall-mount punch-down, wall-mount jack to host.
+- Grading: `DEVICE > Ports > PORT > Link to PEER > Connects to PEERPORT` (eclass 4, nodeValue = name = "Connects to
+  PEERPORT"), on the patch panel for both its jacks and its punch-downs; hosts at a wall mount are graded on the host
+  side with `Link to WALL > Type` = "0 0". The tree also offers `Is Managed in Wiring Closet`.
+- Proof: `structured-cabling` example, items kept 12/12 with values identical to Packet Tracer's own; live check
+  0/12 -> 12/12 and 2/2 pings through wall plate and panel; answer network 12/12, 2/2.
+\n

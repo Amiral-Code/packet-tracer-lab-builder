@@ -32,6 +32,7 @@ WANT = {  # (TYPE, model) -> library key
     ("ASA", "5506-X"): "asa-5506x", ("ASA", "5505"): "asa-5505",
     ("AccessPoint", "AccessPoint-PT-N"): "ap-n", ("AccessPoint", "AccessPoint-PT-AC"): "ap-ac",
     ("LightWeightAccessPoint", "3702i"): "lap-3702i",
+    ("Patch Panel", "Copper Patch Panel"): "patch-panel", ("Wall Mount", "Copper Wall Mount"): "wall-mount",
 }
 # Packet Tracer stores no port names: it derives them per model. Names for devices without an IOS
 # configuration, as they appear on links in real files (the user's activities and Packet Tracer's samples).
@@ -49,6 +50,9 @@ PORT_NAMES = {
     # access points: the Ethernet port is "Port 0" (links in the user's files; the library had FastEthernet0)
     "AccessPoint-PT": ["Port 0"], "AccessPoint-PT-N": ["Port 0"], "AccessPoint-PT-AC": ["Port 0"],
     "3702i": ["GigabitEthernet0"], "LAP-PT": ["GigabitEthernet0"],
+    # structured cabling (NetAcad 1.1.4): jacks at the front, punch-downs at the back
+    "Copper Patch Panel": [f"Jack{i}" for i in range(1, 25)] + [f"PunchDown{i}" for i in range(1, 25)],
+    "Copper Wall Mount": [f"Jack{i}" for i in range(1, 5)] + [f"PunchDown{i}" for i in range(1, 5)],
     "5506-X": [f"GigabitEthernet1/{i}" for i in range(1, 9)] + ["Management1/1"],
     "5505": [f"Ethernet0/{i}" for i in range(8)],
 }
@@ -317,12 +321,13 @@ def card_port_names(card, bay):
     return names
 
 
-def build(sources, destination=None):
-    """Create local templates from .pkt/.pka files the user is allowed to use."""
+def build(sources, destination=None, extra_sources=()):
+    """Create local templates from .pkt/.pka files the user is allowed to use. Extra sources only fill models that
+    no regular source has (so a new sample file cannot replace a proven template)."""
     destination = Path(destination or library_dir())
     devices_out = destination / "devices"
     files = []
-    for rank, source in enumerate(sources):
+    for rank, source in enumerate(list(sources) + list(extra_sources)):
         source = Path(source)
         label = source.name or f"source-{rank + 1}"
         for extension in ("*.pkt", "*.pka"):
@@ -334,9 +339,21 @@ def build(sources, destination=None):
     cards = {}
     base = None
     activity_base = None
+    n_regular = len(list(sources))
     for rank, label, filename in files:
         root = load(filename)
         if root is None:
+            continue
+        extra = rank >= n_regular              # an extra source never wins over a regular one
+        if extra:
+            # only its device templates count, never its base topology or activity
+            for network in network_roots(root):
+                version = network.findtext("VERSION") or root.findtext("VERSION") or "0"
+                for device in network.findall("NETWORK/DEVICES/DEVICE"):
+                    key = library_key(device)
+                    # regular sources come first in `files`, so this only fills models they lack
+                    if key and key not in found:
+                        found[key] = ((vkey(version), -rank), copy.deepcopy(device), label, filename, version)
             continue
         if root.tag == "PACKETTRACER5_ACTIVITY" and root.find("LOCKINGTREE") is not None:
             score = (vkey(root.findtext("VERSION")), -rank)

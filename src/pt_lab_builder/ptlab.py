@@ -365,6 +365,10 @@ PKA_KINDS = {
     "mask": (["Ports", "{port}"], "Subnet Mask", "Subnet Mask", "0", "Ip"),
     # "Port Up" = the interface is up/up (shutdown turns it off); "Power" only means the port has power
     "port_on": (["Ports", "{port}"], "Port Up", "Port Up", "4", "Physical"),
+    # the exact cable: this port is linked to that port of that device (NetAcad's structured-cabling activity grades
+    # every patch-panel run this way); value = node name = "Connects to PEERPORT"
+    "link_to": (["Ports", "{port}", "Link to {peer}"], "Connects to {peer_port}", "Connects to {peer_port}", "4",
+                "Physical"),
     # a host set to DHCP (Desktop > IP Configuration > DHCP); path and value as graded in the user's activities
     "dhcp_client": (["Ports", "{port}"], "DHCP client enable", "DHCP client enable", "0", "Ip"),
     "router_id": (["OSPF", "{process}"], "Router ID", "Router ID", "1", "Routing"),
@@ -423,6 +427,8 @@ def comparisons(items):
         path, name, nid, eclass, comp = PKA_KINDS[it["kind"]]
         comp = it.get("component") or comp          # a lab part ("Hardening") instead of the generic class
         nid = nid.format(**it)
+        if it["kind"] == "link_to":
+            name = name.format(**it)
         cur = _child(root, it["device"])
         for part in path:
             cur = _child(cur, part.format(**it))
